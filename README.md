@@ -1,65 +1,88 @@
 # OpenDGUS
 
-**Open-source designer and toolkit for DWIN T5L (DGUS II) smart displays.**
+**Open-source designer for DWIN T5L (DGUS II) smart displays, with an AI designer built in.**
 
-DWIN's T5L displays are cheap and capable, but the official DGUS editor is Windows-only, closed and hard to start
-with. OpenDGUS writes the display's files directly, so you can design screens without it. The project grew out of
-reverse engineering the editor and its tools.
+DWIN's T5L displays are cheap and capable, but the official DGUS tool is Windows-only, closed and hard to start with.
+Many of these displays end up in a drawer. OpenDGUS replaces the whole workflow:
 
-> Status: early development (v0.1). The file formats and the serial upload already work on real hardware. The
-> desktop editor, the AI designer and the MCP server are under construction. See [Roadmap](#roadmap).
+- **Visual editor** (Electron, Windows/macOS/Linux, English + Romanian). Drag-and-drop pages, cards, text and icons
+  plus smart widgets (buttons, toggles, numbers, sliders, gauges, indicators). The preview is pixel-exact.
+- **Any display:** 26 built-in DWIN models, part-number decoding (`DMG10600C070_03WTC` → 1024×600, 7", capacitive,
+  16 MB, T5L2), or any custom resolution, in landscape or portrait.
+- **20 responsive templates:** home control, thermostat, access control, industrial HMI, 3D printer, EV charger,
+  coffee machine, weather, solar, greenhouse, elevator, PIN keypad, music player, car dashboard, washing machine,
+  alarm panel, queue display, order kiosk, settings, vitals monitor.
+- **AI designer:** describe the screen and let the AI build it. Use the chat in the app (Claude, any
+  OpenAI-compatible API, or local Ollama) or **any MCP client** (Claude Desktop, OpenAI Codex, Google Antigravity).
+  The AI sees its renders and can tap the emulated screen to test its work.
+- **Emulator:** click through your UI on the desktop before you flash anything.
+- **One-click upload** over the USB/UART adapter, or export to an SD card. A `vars.h` with every variable address is
+  generated for your microcontroller.
+- **All 47 DGUS II controls** are available for experts. Every one is byte-checked against the DGUS editor's own
+  code.
 
-## What works today
+Everything was reverse-engineered from the official tools and verified on a real display; the notes are in
+[`docs/re/`](docs/re/). OpenDGUS contains no DWIN code.
 
-| Area | Status |
-|---|---|
-| ICL image libraries (`DGUS_3`) | read and write. A rebuilt library was byte-identical to a DWIN-made one |
-| 13.bin touch controls and 14.bin display controls | 13 of 47 control types encoded and byte-matched to DGUS's own code; the rest are documented |
-| 22.bin initial variables | write, verified on hardware |
-| Fonts (HZK/DZK/BIN, 0# ASCII, 4-bit gray) | write (and read for some) |
-| T5LCFG.CFG | decode |
-| UART upload, read-back, live variables, touch simulation | works on hardware, using the same sequence as DWIN's AllTool |
-| Desktop emulator | page images, icons, numbers, toggles, buttons |
-
-## Quick start (developer preview)
+## Quick start
 
 ```bash
-git clone <this repo> && cd opendgus
-python -m venv .venv && .venv/Scripts/activate      # Linux/macOS: source .venv/bin/activate
+git clone <repo> opendgus && cd opendgus
+python -m venv .venv && .venv/Scripts/activate        # Linux/macOS: source .venv/bin/activate
 pip install -e ".[dev]"
 
-python -m opendgus.templates.home_control           # builds build/home_control/DWIN_SET
-opendgus-emu build/home_control/DWIN_SET            # try it on the desktop
-opendgus-load ports                                 # find the display's COM port
-opendgus-load upload build/home_control/DWIN_SET -p COM3 --reset
+cd app && npm install && npm run dev                  # the desktop editor (it starts the Python backend itself)
 ```
 
-You can also copy `DWIN_SET` to a FAT32 microSD card with 4 KB clusters (`opendgus-load sd DWIN_SET E:`) and power the
-display on with the card inserted.
-
-## Roadmap
-
-- [x] Reverse-engineered formats, UART protocol, emulator (milestone 1)
-- [ ] All 47 DGUS control types, byte-matched against DGUS
-- [ ] Project model, compiler and smart widgets (button, toggle, slider, gauge, chart, keypad...)
-- [ ] An emulator for every control
-- [ ] MCP server, so Claude Desktop, Codex and Antigravity can design screens
-- [ ] Electron desktop editor (English / Romanian)
-- [ ] In-app AI designer (Claude API, OpenAI-compatible, Ollama)
-- [ ] 20 templates for different resolutions and display profiles
-
-## Repository layout
-
-```
-src/opendgus/      the Python package (formats, device, emulator, templates)
-tests/             pytest suite; tests/vectors holds byte vectors produced by DGUS's own C# code
-tools/             csharp_harness: regenerates those vectors from a local decompile (not redistributed)
-docs/re/           reverse-engineering notes for every file format and protocol
-re/                one-off research scripts
+Command line, without the editor:
+```bash
+python -m opendgus.templates.home_control 800x480 my_screen   # project + build/DWIN_SET
+opendgus-emu my_screen/build/DWIN_SET                         # try it on the desktop
+opendgus-load ports                                           # find the display's COM port
+opendgus-load upload my_screen/build/DWIN_SET -p COM3 --reset # flash it over UART
+opendgus-load sd my_screen/build/DWIN_SET E:                  # or copy it to a FAT32/4 KB microSD
 ```
 
-## Legal
+**AI through MCP:** see [`docs/mcp.md`](docs/mcp.md) for Claude Desktop, Codex and Antigravity setup. The command
+is `opendgus-mcp`.
 
-OpenDGUS is licensed under the **GNU GPL v3 or later** (see `LICENSE`). It contains no DWIN code or binaries; the
-formats are implemented from our own reverse-engineering notes in `docs/re/`. DWIN and DGUS are trademarks of
-Beijing DWIN Technology Co., Ltd. This project is not affiliated with DWIN.
+## How it works
+
+```
+project.json ─► compiler ─► DWIN_SET/ ─► SD card or UART ─► display
+ (pages, widgets,   │          13.bin  touch controls
+  variables, theme) │          14.bin  display controls
+                    │          22.bin  initial variable values
+                    │          32_pages.icl / NN_icons.icl  page images and widget art (JPEG)
+                    │          T5LCFG.CFG  safe system options (never panel timing)
+                    └─► vars.h + manifest.json for your MCU
+```
+
+At run time your microcontroller writes variables with `5A A5 05 82 <VP> <value>`, and the display reports touches
+as `5A A5 06 83 <VP> 01 <value>`.
+
+## Reference
+- [Smart widgets](docs/reference/widgets.md) · [DGUS controls](docs/reference/dgus-controls.md) ·
+  [Templates](docs/reference/templates.md) · [Display profiles](docs/reference/displays.md) (generated by
+  `tools/gen_docs.py`)
+- [MCP / AI setup](docs/mcp.md) · [UART upload](docs/device-upload.md) · [Reverse-engineering notes](docs/re/)
+
+## Hardware notes
+- The UART upload uses the exact sequence of DWIN's own downloader. It pauses the screen refresh and keeps it paused
+  6 s after each block. Without that pause a display can lock up at boot, and only an SD card recovers it.
+- Some units ship a rotated factory ASCII font, so OpenDGUS draws numbers with its own digit images by default.
+- Controls marked "byte-matched to DGUS" haven't been tried on hardware yet. Reports and photos are welcome.
+
+## Development
+```
+src/opendgus/   formats (all 47 controls, ICL, fonts, CFG) · model · compiler · widgets · render · emulator
+                device (UART) · tools (shared by MCP, AI and editor) · ai · mcp_server · server · templates
+app/            Electron + React editor
+tests/          pytest (byte-exact vectors from DGUS's own C# code in tests/vectors)
+tools/          csharp_harness (regenerates vectors from a local decompile), fetch_assets, gen_docs
+```
+Run `pytest` and `cd app && npm test`. CI runs both on Windows, macOS and Linux.
+
+## License
+GPL-3.0-or-later. Bundled: Inter font (SIL OFL 1.1) and Tabler Icons (MIT). DWIN and DGUS are trademarks of Beijing
+DWIN Technology Co., Ltd.; this project is not affiliated with DWIN.
