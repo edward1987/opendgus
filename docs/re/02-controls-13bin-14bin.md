@@ -1015,7 +1015,7 @@ How the editor chooses SP:
 
 ## 7. Python model and cross-check
 
-All of these files are in the scratchpad folder `C:\Users\Edward\AppData\Local\Temp\claude\D--apps-displayuscreen\304e2e36-9a32-434d-afd0-65a5f528b7e4\scratchpad\re2\`:
+All of these files are in the scratchpad folder `re/re2/ (research copy; code now in src/opendgus)`:
 
 - `dgus_controls.py`: encoders for
   - touch: basic touch, return key (FE05/FD05), data input (FE00), ASCII text input (FE06);

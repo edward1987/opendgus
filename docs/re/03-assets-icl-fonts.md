@@ -15,7 +15,7 @@ Path abbreviations:
 | `MV/`, `EX/` | Movie2ICL.exe, Excel2ICL.dll → `scratchpad/re3/decomp/{Movie2ICL,Excel2ICL}/` |
 | `MAN` | `vendor/docs/txt/T5L_DGUSII-Application-Development-Guide-V2.921.txt` |
 
-Scratchpad root: `C:\Users\Edward\AppData\Local\Temp\claude\D--apps-displayuscreen\304e2e36-9a32-434d-afd0-65a5f528b7e4\scratchpad\re3\`. The decompiled sources there are throwaway; re-create them with `ilspycmd -p -o <dir> <dll>`.
+Scratchpad root: `re/re3/ (research copy; code now in src/opendgus)`. The decompiled sources there are throwaway; re-create them with `ilspycmd -p -o <dir> <dll>`.
 
 Deliverable code:
 - `scratchpad/re3/dgus_assets.py`: ICL reader and writer (stdlib only), JPEG preparation, encoder (needs Pillow), matrix-font index/pack/build, gray-font build/read, and a CLI (`info`, `extract`, `build`).

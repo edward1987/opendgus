@@ -5,7 +5,7 @@ Scope: T5L (T5L0/T5L1/T5L2) DGUS II, COF module + HDL662S adapter. Out of scope 
 
 ## 0. Sources and conventions
 
-| Tag | File (all under `D:\apps\displayuscreen\vendor\`) |
+| Tag | File (all under `vendor\`) |
 |---|---|
 | [AG] | `docs\txt\T5L_DGUSII-Application-Development-Guide-V2.921.txt` (main) |
 | [ASIC] | `docs\txt\Development-Guide-of-T5L-ASIC-2024-09-25.txt` |
@@ -18,7 +18,7 @@ number printed on the page), and "L" is the line in the .txt.
 Status marks: **[V]** I checked it here (script, compile, or byte-level check). **[D]** The documentation says so, but I have
 not tested it on hardware. **[U]** Unverified inference or guess.
 
-Scripts are in `C:\Users\Edward\AppData\Local\Temp\claude\D--apps-displayuscreen\304e2e36-9a32-434d-afd0-65a5f528b7e4\scratchpad\re4\`:
+Scripts are in `re/re4/ (research copy; code now in src/opendgus)`:
 - `t5lcfg.py` decodes a CFG file.
 - `dgus_frame.py` builds frames and runs the CRC self-test.
 - `hex2bin.py` converts Intel HEX to T5L51.bin.
