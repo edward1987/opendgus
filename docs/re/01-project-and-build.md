@@ -10,7 +10,7 @@ Path shorthand (all relative to `vendor/decompiled/`):
 - `GL` = `DwinTerminal/BizDraw/Globel.cs`
 - `F1` = `DGUS_V7.651/BizDrawClient/Form1.cs`
 
-Decoder: `C:\Users\Edward\AppData\Local\Temp\claude\D--apps-displayuscreen\304e2e36-9a32-434d-afd0-65a5f528b7e4\scratchpad\re1\dgus_project.py`
+Decoder: `re/re1/dgus_project.py`
 (`python -I dgus_project.py <projectdir | x.tft | x.hmi> [--json]`). It contains a generic MS-NRBF parser, the DWIN XOR, and an INI reader.
 
 ---
