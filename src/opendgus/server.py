@@ -150,6 +150,37 @@ def create_app(token: str = TOKEN) -> FastAPI:
         except (WebSocketDisconnect, RuntimeError):
             return
 
+    # ------------------------------------------------------------------ icons & template thumbnails
+
+    def _png_response(img) -> Response:
+        import io
+        b = io.BytesIO()
+        img.save(b, "PNG")
+        return Response(b.getvalue(), media_type="image/png", headers={"Cache-Control": "max-age=86400"})
+
+    @app.get("/api/icon/{name}.png")
+    def icon_png(name: str, size: int = 32, color: str = "#E2E8F0"):
+        from PIL import Image as PImage, ImageDraw
+        from .render.fonts import icon_char, icon_font
+        try:
+            ch = icon_char(name)
+        except KeyError as e:
+            raise HTTPException(404, str(e))
+        size = max(8, min(size, 256))
+        img = PImage.new("RGBA", (size, size), (0, 0, 0, 0))
+        ImageDraw.Draw(img).text((size / 2, size / 2), ch, font=icon_font(size), fill=color, anchor="mm")
+        return _png_response(img)
+
+    @app.get("/api/template/{name}.png")
+    def template_png(name: str, width: int = 1024, height: int = 600, page: int = 0, scale: float = 0.3):
+        from .templates import TEMPLATES
+        if name not in TEMPLATES:
+            raise HTTPException(404, f"unknown template {name}")
+        proj = TEMPLATES[name].build(width, height)
+        pid = page if any(p.id == page for p in proj.pages) else proj.pages[0].id
+        img, _ = render_preview(proj, None, pid)
+        return _png_response(img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale)))))
+
     # ------------------------------------------------------------------ AI designer
     from . import ai as AI
     sessions: dict[str, AI.ChatSession] = {}

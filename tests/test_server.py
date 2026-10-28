@@ -56,3 +56,12 @@ def test_websocket_notifies_changes(tmp_path):
         assert ws.receive_json()["type"] == "project_changed"           # initial state
         c.post("/api/tools/add_page", json={"name": "Two"})
         assert ws.receive_json()["type"] == "project_changed"
+
+
+def test_icon_and_template_thumbnails():
+    c = client()
+    r = c.get("/api/icon/bulb.png?size=48")
+    assert r.status_code == 200 and r.content[:4] == b"\x89PNG"
+    assert c.get("/api/icon/definitely-not-an-icon.png").status_code == 404
+    r = c.get("/api/template/home_control.png?width=800&height=480&scale=0.25")
+    assert r.status_code == 200 and r.content[:4] == b"\x89PNG"
