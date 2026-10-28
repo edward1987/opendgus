@@ -18,6 +18,7 @@
   .\build-release.ps1                      # build the version in app/package.json
   .\build-release.ps1 -Version 0.7.0       # bump to 0.7.0 and build
   .\build-release.ps1 -Version 0.7.0 -Publish
+  .\build-release.ps1 -Version 0.7.0 -Publish -NotesFile notes.md
 #>
 [CmdletBinding()]
 param(
@@ -25,7 +26,8 @@ param(
   [switch]$SkipTests,
   [switch]$CleanInstall,    # npm ci even when node_modules exists
   [switch]$Publish,         # tag + push + draft GitHub release
-  [switch]$AllowDirty       # build even with uncommitted changes
+  [switch]$AllowDirty,      # build even with uncommitted changes
+  [string]$NotesFile        # hand-written release notes (Markdown) instead of the generated ones
 )
 
 $ErrorActionPreference = "Stop"
@@ -187,6 +189,10 @@ $lines = @(
 $lines += $log
 $lines += @("", "SHA-256 checksums are in SHA256SUMS.txt.")
 $notes = $lines -join "`n"
+if ($NotesFile) {
+  if (-not (Test-Path $NotesFile)) { Fail "notes file $NotesFile not found" }
+  $notes = [IO.File]::ReadAllText((Resolve-Path $NotesFile))
+}
 [IO.File]::WriteAllText((Join-Path $out "RELEASE_NOTES.md"), $notes, $Utf8)
 
 Get-ChildItem $out | ForEach-Object { Write-Host ("  {0,-45} {1,8:N1} MB" -f $_.Name, ($_.Length / 1MB)) }
