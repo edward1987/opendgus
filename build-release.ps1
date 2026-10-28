@@ -161,7 +161,7 @@ Step "Collecting files"
 $out = Join-Path $Root "release\$Tag"
 if (Test-Path $out) { Remove-Item $out -Recurse -Force }
 New-Item -ItemType Directory -Force $out | Out-Null
-$files = Get-ChildItem (Join-Path $App "release") -File | Where-Object { $_.Extension -in ".exe", ".blockmap" -or $_.Name -eq "latest.yml" }
+$files = Get-ChildItem (Join-Path $App "release") -File | Where-Object { $_.Extension -eq ".exe" }
 if (-not ($files | Where-Object { $_.Name -like "*Setup*.exe" })) { Fail "no installer found in app\release" }
 $files | Copy-Item -Destination $out
 

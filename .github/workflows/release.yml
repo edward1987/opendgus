@@ -79,7 +79,27 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           draft: false
+          # keep files already uploaded (e.g. by build-release.ps1 -Publish), only add the missing platforms
+          overwrite_files: false
           files: |
             app/release/*.exe
             app/release/*.dmg
             app/release/*.AppImage
+
+  checksums:
+    name: SHA256SUMS.txt
+    needs: build
+    if: startsWith(github.ref, 'refs/tags/v')
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checksum every installer on the release
+        env:
+          GH_TOKEN: ${{ github.token }}
+          TAG: ${{ github.ref_name }}
+        run: |
+          gh release view "$TAG" -R "$GITHUB_REPOSITORY" --json assets \
+            --jq '.assets[] | select(.name|test("[.](exe|dmg|AppImage)$")) | "\(.digest|ltrimstr("sha256:"))  \(.name)"' \
+            > SHA256SUMS.txt
+          cat SHA256SUMS.txt
+          test -s SHA256SUMS.txt
+          gh release upload "$TAG" SHA256SUMS.txt --clobber -R "$GITHUB_REPOSITORY"
