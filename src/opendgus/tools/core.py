@@ -1,0 +1,539 @@
+"""The OpenDGUS tool set: one implementation shared by the MCP server, the in-app AI designer and the editor API.
+
+Every tool is a plain function with typed parameters and a docstring (the description AIs see). Tools operate on
+the *current project* (a folder with project.json). Each edit loads the file, changes it, validates it and saves it
+atomically, so the editor (which watches the file) and other clients see changes live.
+"""
+from __future__ import annotations
+
+import io
+import json
+import threading
+from dataclasses import dataclass
+from pathlib import Path
+from typing import Any, Literal, Optional
+
+from pydantic import TypeAdapter
+
+from .. import widgets as W
+from ..compiler import compile_project
+from ..formats import spec as S
+from ..formats import specs as _specs  # noqa: F401
+from ..model import Background, Control, Display, Element, Page, Project, Theme, Variable
+from ..profiles import PROFILES, decode_part_number
+from ..render.fonts import search_icons as _search_icons
+
+
+@dataclass
+class ToolImage:
+    """A PNG returned by a tool (adapters turn it into MCP / provider image content)."""
+    png: bytes
+    caption: str = ""
+
+
+class ToolError(Exception):
+    pass
+
+
+class Session:
+    def __init__(self) -> None:
+        self.folder: Optional[Path] = None
+        self.lock = threading.RLock()
+
+    def require(self) -> Path:
+        if self.folder is None:
+            raise ToolError("no project open: call create_project or open_project first")
+        return self.folder
+
+    def load(self) -> Project:
+        return Project.load(self.require())
+
+    def save(self, p: Project) -> None:
+        p.ensure_ids()
+        Project.model_validate(p.model_dump())     # full validation before touching the file
+        p.save(self.require())
+
+
+SESSION = Session()
+_ELEMENT = TypeAdapter(Element)
+
+
+def _summary(p: Project) -> dict:
+    return {"name": p.name, "display": f"{p.display.width}x{p.display.height}", "pages": [
+        {"id": pg.id, "name": pg.name, "elements": len(pg.elements), "controls": len(pg.controls)} for pg in p.pages],
+        "variables": [v.name for v in p.variables]}
+
+
+def _png(img, scale: float = 1.0) -> bytes:
+    if scale != 1.0:
+        img = img.resize((max(1, round(img.width * scale)), max(1, round(img.height * scale))))
+    b = io.BytesIO()
+    img.save(b, "PNG", optimize=True)
+    return b.getvalue()
+
+
+# ======================================================================= catalog
+
+def list_display_profiles(query: str = "") -> list[dict]:
+    """List known DWIN T5L display models (resolution, size, touch, flash, CPU). Filter with a substring query
+    such as '1024', '7.0' or 'round'. Any resolution can also be used via create_project(width, height)."""
+    q = query.lower()
+    out = []
+    for p in PROFILES.values():
+        d = p.to_dict()
+        if not q or q in json.dumps(d).lower():
+            out.append({k: d[k] for k in ("id", "width", "height", "diagonal", "touch", "flash_mb", "cpu", "series")})
+    return out
+
+
+def decode_display_part_number(part_number: str) -> dict:
+    """Decode a DWIN part number (e.g. 'DMG10600C070_03WTC') into resolution, size, touch type, flash and CPU."""
+    return decode_part_number(part_number).to_dict()
+
+
+def list_widgets() -> list[dict]:
+    """List the smart widgets (button, toggle, number, slider, progress, indicator...) with a one-line description.
+    Use get_widget_schema(type) for the full property list before adding one."""
+    return [{"type": k, "title": w.title, "category": w.category, "needs_var": w.needs_var, "description": w.doc}
+            for k, w in sorted(W.WIDGETS.items())]
+
+
+def get_widget_schema(type: str) -> dict:
+    """Full JSON schema of a widget's props, or of a raw DGUS control ('raw:<key>') fields."""
+    if type.startswith("raw:"):
+        key = type[4:]
+        if key not in S.REGISTRY:
+            raise ToolError(f"unknown DGUS control {key!r}")
+        return S.schema(key)
+    if type not in W.WIDGETS:
+        raise ToolError(f"unknown widget {type!r}; see list_widgets()")
+    return W.WIDGETS[type].schema()
+
+
+def list_dgus_controls(category: str = "") -> list[dict]:
+    """List all 47 low-level DGUS II controls (expert use via control type 'raw:<key>')."""
+    return [{"type": f"raw:{k}", "title": s.title, "kind": s.kind, "category": s.category, "verified": s.verified,
+             "description": s.doc} for k, s in sorted(S.REGISTRY.items()) if not category or s.category == category]
+
+
+def search_icons(query: str, limit: int = 30) -> list[str]:
+    """Search the bundled icon set (Tabler, 5700+ icons) by name, e.g. 'light', 'temp', 'wifi', 'arrow'."""
+    return _search_icons(query, limit)
+
+
+# ======================================================================= project
+
+def create_project(folder: str, name: str = "Untitled", profile: str = "", width: int = 0, height: int = 0,
+                   template: str = "") -> dict:
+    """Create a new project folder and make it current. Give a DWIN part number/profile id (profile) OR a custom
+    width/height. Optionally start from a template id (see list_templates). Fails if project.json already exists."""
+    f = Path(folder).expanduser()
+    if (f / "project.json").exists():
+        raise ToolError(f"{f} already contains a project; use open_project")
+    if template:
+        from ..templates import TEMPLATES
+        if template not in TEMPLATES:
+            raise ToolError(f"unknown template {template!r}")
+        disp = Display.from_profile(profile) if profile else Display.custom(width or 800, height or 480)
+        p = TEMPLATES[template].build(disp.width, disp.height)
+        p.display = disp
+    else:
+        disp = Display.from_profile(profile) if profile else Display.custom(width or 800, height or 480)
+        p = Project(display=disp)
+    p.name = name if name != "Untitled" or not template else p.name
+    SESSION.folder = f
+    SESSION.save(p)
+    return {"folder": str(f), **_summary(p)}
+
+
+def open_project(folder: str) -> dict:
+    """Open an existing project folder (containing project.json) and make it current."""
+    f = Path(folder).expanduser()
+    if not (f / "project.json").exists():
+        raise ToolError(f"no project.json in {f}")
+    SESSION.folder = f
+    return {"folder": str(f), **_summary(SESSION.load())}
+
+
+def get_project(page: Optional[int] = None) -> dict:
+    """The current project as JSON (all pages, or only one page if `page` is given). Read this before editing."""
+    p = SESSION.load()
+    d = p.model_dump(mode="json", exclude_defaults=True)
+    if page is not None:
+        d["pages"] = [pg for pg in d["pages"] if pg["id"] == page]
+    return d
+
+
+def set_display(profile: str = "", width: int = 0, height: int = 0, rotation: Optional[int] = None,
+                backlight: Optional[int] = None, baud: Optional[int] = None) -> dict:
+    """Change the target display (profile or width/height) and device options. Existing layout is not rescaled."""
+    with SESSION.lock:
+        p = SESSION.load()
+        if profile:
+            p.display = Display.from_profile(profile)
+        elif width and height:
+            p.display = Display.custom(width, height)
+        for k, v in (("rotation", rotation), ("backlight", backlight), ("baud", baud)):
+            if v is not None:
+                setattr(p.display, k, v)
+        SESSION.save(p)
+        return p.display.model_dump()
+
+
+def set_theme(colors: Optional[dict[str, str]] = None, font: str = "", radius: Optional[int] = None,
+              name: str = "") -> dict:
+    """Update theme tokens. colors maps token -> '#RRGGBB' (background, surface, surface2, primary, primary_dark,
+    accent, text, muted, success, warning, danger, on_primary, or new ones). Elements reference tokens by name."""
+    with SESSION.lock:
+        p = SESSION.load()
+        t = p.theme.model_dump()
+        if colors:
+            t["colors"] = {**t["colors"], **colors}
+        if font:
+            t["font"] = font
+        if radius is not None:
+            t["radius"] = radius
+        if name:
+            t["name"] = name
+        p.theme = Theme.model_validate(t)
+        SESSION.save(p)
+        return p.theme.model_dump()
+
+
+# ======================================================================= variables
+
+def add_variable(name: str, type: Literal["int16", "uint16", "int32", "uint32", "text", "bits"] = "int16",
+                 init: Any = 0, decimals: int = 0, length: int = 16, doc: str = "", vp: Optional[int] = None) -> dict:
+    """Add a named variable (the data shared with the MCU). VP address is auto-allocated unless `vp` is given.
+    decimals: fixed-point display (value 215 with decimals=1 shows 21.5)."""
+    with SESSION.lock:
+        p = SESSION.load()
+        if any(v.name == name for v in p.variables):
+            raise ToolError(f"variable {name!r} exists")
+        p.variables.append(Variable(name=name, type=type, init=init, decimals=decimals, length=length, doc=doc, vp=vp))
+        SESSION.save(p)
+        return {"name": name, "vp": f"0x{p.allocate_vps()[name]:04X}"}
+
+
+def update_variable(name: str, init: Any = None, decimals: Optional[int] = None, doc: Optional[str] = None,
+                    type: Optional[str] = None) -> dict:
+    """Change a variable's initial value, decimals, description or type."""
+    with SESSION.lock:
+        p = SESSION.load()
+        v = p.variable(name)
+        for k, val in (("init", init), ("decimals", decimals), ("doc", doc), ("type", type)):
+            if val is not None:
+                setattr(v, k, val)
+        SESSION.save(p)
+        return v.model_dump()
+
+
+def delete_variable(name: str) -> dict:
+    """Delete a variable (fails if a control still uses it)."""
+    with SESSION.lock:
+        p = SESSION.load()
+        users = [c.id for pg in p.pages for c in pg.controls if c.var == name]
+        if users:
+            raise ToolError(f"variable {name!r} used by {users}")
+        p.variables = [v for v in p.variables if v.name != name]
+        SESSION.save(p)
+        return {"deleted": name}
+
+
+# ======================================================================= pages
+
+def add_page(name: str = "", id: Optional[int] = None, background: str = "background",
+             background_gradient: Optional[list[str]] = None) -> dict:
+    """Add a page. id defaults to the next free number. background is a colour or theme token."""
+    with SESSION.lock:
+        p = SESSION.load()
+        pid = id if id is not None else max((pg.id for pg in p.pages), default=-1) + 1
+        if any(pg.id == pid for pg in p.pages):
+            raise ToolError(f"page {pid} exists")
+        p.pages.append(Page(id=pid, name=name, background=Background(color=background, gradient=background_gradient)))
+        SESSION.save(p)
+        return {"page": pid}
+
+
+def update_page(page: int, name: Optional[str] = None, background: Optional[str] = None,
+                background_gradient: Optional[list[str]] = None) -> dict:
+    """Rename a page or change its background colour/gradient."""
+    with SESSION.lock:
+        p = SESSION.load()
+        pg = p.page(page)
+        if name is not None:
+            pg.name = name
+        if background is not None:
+            pg.background = Background(color=background)
+        if background_gradient is not None:
+            pg.background = Background(gradient=background_gradient)
+        SESSION.save(p)
+        return {"page": page}
+
+
+def delete_page(page: int) -> dict:
+    """Delete a page and everything on it."""
+    with SESSION.lock:
+        p = SESSION.load()
+        p.page(page)
+        p.pages = [pg for pg in p.pages if pg.id != page]
+        SESSION.save(p)
+        return {"deleted": page}
+
+
+def duplicate_page(page: int, new_id: Optional[int] = None, name: str = "") -> dict:
+    """Copy a page (elements and controls get new ids)."""
+    with SESSION.lock:
+        p = SESSION.load()
+        src = p.page(page).model_copy(deep=True)
+        src.id = new_id if new_id is not None else max(pg.id for pg in p.pages) + 1
+        src.name = name or f"{src.name} copy"
+        for it in [*src.elements, *src.controls]:
+            it.id = ""
+        p.pages.append(src)
+        SESSION.save(p)
+        return {"page": src.id}
+
+
+# ======================================================================= elements & controls
+
+def add_element(page: int, element: dict) -> dict:
+    """Add a static element (baked into the page image). element is one of:
+    {"type":"rect","x","y","w","h","fill","stroke","stroke_width","radius","gradient":[..]},
+    {"type":"ellipse",...}, {"type":"line","points":[x1,y1,x2,y2,...],"color","width"},
+    {"type":"text","text","x","y","w","h","size","weight":"light|regular|semibold|bold","color","align","valign"},
+    {"type":"icon","name","x","y","w","h","color"}, {"type":"image","src":"assets/..","x","y","w","h","fit"}.
+    Colours are '#RRGGBB' or theme tokens ('primary', 'surface', 'text', 'muted', ...)."""
+    with SESSION.lock:
+        p = SESSION.load()
+        el = _ELEMENT.validate_python(element)
+        p.page(page).elements.append(el)
+        SESSION.save(p)
+        return {"id": el.id, "page": page}
+
+
+def add_control(page: int, type: str, x: int, y: int, w: int, h: int, var: Optional[str] = None,
+                props: Optional[dict] = None) -> dict:
+    """Add a dynamic control: a smart widget type from list_widgets() (button, toggle, number, slider, progress,
+    indicator, ...) or 'raw:<dgus control>'. `var` is the variable name it reads/writes (create it first with
+    add_variable). `props` follows get_widget_schema(type). Example: add_control(0, 'toggle', 40, 120, 300, 200,
+    var='light1', props={'label': 'Kitchen', 'icon': 'bulb'})."""
+    with SESSION.lock:
+        p = SESSION.load()
+        if not type.startswith("raw:") and type not in W.WIDGETS:
+            raise ToolError(f"unknown widget {type!r}; see list_widgets()")
+        if not type.startswith("raw:"):
+            W.WIDGETS[type].props_model.model_validate(props or {})
+        if var is not None:
+            p.variable(var)
+        c = Control(type=type, x=x, y=y, w=w, h=h, var=var, props=props or {})
+        p.page(page).controls.append(c)
+        SESSION.save(p)
+        return {"id": c.id, "page": page}
+
+
+def update_item(id: str, changes: dict) -> dict:
+    """Change fields of an element or control by id, e.g. update_item('c3', {'x': 50, 'props': {'label': 'Hi'}}).
+    For controls, 'props' is merged into the existing props."""
+    with SESSION.lock:
+        p = SESSION.load()
+        pg, it = p.find(id)
+        data = it.model_dump()
+        if "props" in changes and isinstance(it, Control):
+            data["props"] = {**data["props"], **changes["props"]}
+            changes = {k: v for k, v in changes.items() if k != "props"}
+        data.update(changes)
+        new = type(it).model_validate(data)
+        if isinstance(new, Control) and not new.type.startswith("raw:"):
+            W.WIDGETS[new.type].props_model.model_validate(new.props)
+        coll = pg.controls if isinstance(it, Control) else pg.elements
+        coll[coll.index(it)] = new
+        SESSION.save(p)
+        return new.model_dump(exclude_defaults=True)
+
+
+def delete_item(id: str) -> dict:
+    """Delete an element or control by id."""
+    with SESSION.lock:
+        p = SESSION.load()
+        pg, it = p.find(id)
+        (pg.controls if isinstance(it, Control) else pg.elements).remove(it)
+        SESSION.save(p)
+        return {"deleted": id}
+
+
+def arrange(ids: list[str], mode: Literal["left", "right", "top", "bottom", "center_x", "center_y",
+                                          "distribute_x", "distribute_y"]) -> dict:
+    """Align or evenly distribute several items (by id) relative to each other."""
+    with SESSION.lock:
+        p = SESSION.load()
+        items = [p.find(i)[1] for i in ids]
+        boxes = [it for it in items if hasattr(it, "w")]
+        if not boxes:
+            raise ToolError("nothing to arrange")
+        if mode == "left":
+            m = min(b.x for b in boxes); [setattr(b, "x", m) for b in boxes]
+        elif mode == "right":
+            m = max(b.x + b.w for b in boxes); [setattr(b, "x", m - b.w) for b in boxes]
+        elif mode == "top":
+            m = min(b.y for b in boxes); [setattr(b, "y", m) for b in boxes]
+        elif mode == "bottom":
+            m = max(b.y + b.h for b in boxes); [setattr(b, "y", m - b.h) for b in boxes]
+        elif mode == "center_x":
+            m = sum(b.x + b.w / 2 for b in boxes) / len(boxes); [setattr(b, "x", round(m - b.w / 2)) for b in boxes]
+        elif mode == "center_y":
+            m = sum(b.y + b.h / 2 for b in boxes) / len(boxes); [setattr(b, "y", round(m - b.h / 2)) for b in boxes]
+        else:
+            ax, size = ("x", "w") if mode == "distribute_x" else ("y", "h")
+            bs = sorted(boxes, key=lambda b: getattr(b, ax))
+            start, end = getattr(bs[0], ax), getattr(bs[-1], ax) + getattr(bs[-1], size)
+            gap = (end - start - sum(getattr(b, size) for b in bs)) / max(1, len(bs) - 1)
+            pos = start
+            for b in bs:
+                setattr(b, ax, round(pos)); pos += getattr(b, size) + gap
+        SESSION.save(p)
+        return {"arranged": ids}
+
+
+# ======================================================================= render / validate / build
+
+def render_page(page: int = 0, scale: float = 0.5, outlines: bool = False) -> ToolImage:
+    """Render a page as it will look on the display (PNG). Use this to check your design. scale<1 saves tokens.
+    outlines=True draws touch areas (yellow) and dynamic controls (magenta) with their ids."""
+    from PIL import ImageDraw
+    p = SESSION.load()
+    r = compile_project(p, SESSION.require(), write=False)
+    if page not in r.pages:
+        raise ToolError(f"page {page} not rendered; issues: {[str(i) for i in r.issues][:5]}")
+    img = r.pages[page].copy()
+    if outlines:
+        d = ImageDraw.Draw(img)
+        for c in p.page(page).controls:
+            d.rectangle((c.x, c.y, c.x + c.w - 1, c.y + c.h - 1), outline=(255, 0, 255), width=2)
+            d.text((c.x + 3, c.y + 2), f"{c.id}:{c.type}", fill=(255, 0, 255))
+        for e in p.page(page).elements:
+            if hasattr(e, "w"):
+                d.text((e.x + 3, e.y + e.h - 12), e.id, fill=(255, 255, 0))
+    issues = [str(i) for i in r.issues]
+    return ToolImage(_png(img, scale), "issues: " + "; ".join(issues) if issues else "no issues")
+
+
+def validate() -> dict:
+    """Compile in memory and report errors/warnings (off-screen controls, missing variables, overlaps, flash)."""
+    p = SESSION.load()
+    r = compile_project(p, SESSION.require(), write=False)
+    return {"ok": r.ok, "issues": [str(i) for i in r.issues], "pages": sorted(r.pages), "icons": r.icon_count}
+
+
+def build() -> dict:
+    """Compile the project into <project>/build/DWIN_SET (files for the SD card or UART upload) + vars.h."""
+    p = SESSION.load()
+    r = compile_project(p, SESSION.require())
+    return {"ok": r.ok, "out": str(r.out_dir), "files": r.files, "issues": [str(i) for i in r.issues],
+            "variables": {k: f"0x{v:04X}" for k, v in r.vps.items()}}
+
+
+# ======================================================================= templates
+
+def list_templates() -> list[dict]:
+    """Ready-made responsive project templates (use with create_project(template=...) or apply_template)."""
+    from ..templates import TEMPLATES
+    return [{"id": k, "title": t.TITLE, "description": t.DESCRIPTION} for k, t in sorted(TEMPLATES.items())]
+
+
+def apply_template(template: str) -> dict:
+    """Replace the current project's pages, variables and theme with a template scaled to the current display."""
+    from ..templates import TEMPLATES
+    if template not in TEMPLATES:
+        raise ToolError(f"unknown template {template!r}")
+    with SESSION.lock:
+        p = SESSION.load()
+        t = TEMPLATES[template].build(p.display.width, p.display.height)
+        t.display, t.name = p.display, p.name
+        SESSION.save(t)
+        return _summary(t)
+
+
+# ======================================================================= device (real hardware over UART)
+
+def list_serial_ports() -> list[dict]:
+    """Serial ports on this computer (the DWIN adapter shows up as e.g. 'XR21V1410 USB UART')."""
+    from serial.tools import list_ports
+    return [{"port": p.device, "description": p.description} for p in list_ports.comports()]
+
+
+def _dev(port: str, baud: int):
+    import serial
+    from ..device import dwinload as dl
+    return dl, dl.Dgus(serial.Serial(port, baud, timeout=0.05), timeout=1.0)
+
+
+def device_info(port: str, baud: int = 115200) -> dict:
+    """Ping a connected display: firmware version and current page."""
+    dl, d = _dev(port, baud)
+    try:
+        v = d.read_words(0x000F, 1)[0]
+        return {"firmware": f"0x{v:04X}", "page": d.read_words(0x0014, 1)[0], "gui_alive": dl.gui_alive(d, 1.5)}
+    finally:
+        d.port.close()
+
+
+def device_upload(port: str, confirm: bool = False, baud: int = 115200) -> dict:
+    """Build and upload the project to a display over UART (DWIN AllTool timing), then reset it.
+    This overwrites the display's flash: only call with confirm=True after the user agreed."""
+    if not confirm:
+        raise ToolError("device_upload overwrites the display; ask the user, then call again with confirm=True")
+    p = SESSION.load()
+    r = compile_project(p, SESSION.require())
+    if not r.ok:
+        raise ToolError(f"build failed: {[str(i) for i in r.issues]}")
+    dl, d = _dev(port, baud)
+    log = []
+    try:
+        d.write_words(0x00FC, [0x55AA, 0x5AA5])
+        import time
+        time.sleep(2.0)
+        order = sorted((f for f in r.files.items() if f[1]["slot"] is not None), key=lambda kv: -kv[1]["slot"])
+        for name, f in order:
+            data = (r.out_dir / name).read_bytes()
+            d.upload_slot(data, f["slot"], 6000, log=lambda *_: None)
+            log.append(f"{name} -> slot {f['slot']} ({len(data)} bytes)")
+        d.reset()
+    finally:
+        d.port.close()
+    return {"uploaded": log, "note": "T5LCFG.CFG is only applied from an SD card"}
+
+
+def device_read_variable(port: str, name: str, baud: int = 115200) -> dict:
+    """Read a project variable's current value from the connected display."""
+    p = SESSION.load()
+    vp = p.allocate_vps()[name]
+    _, d = _dev(port, baud)
+    try:
+        return {"name": name, "vp": f"0x{vp:04X}", "value": d.read_words(vp, 1)[0]}
+    finally:
+        d.port.close()
+
+
+def device_write_variable(port: str, name: str, value: int, baud: int = 115200) -> dict:
+    """Write a project variable on the connected display (like the MCU would)."""
+    p = SESSION.load()
+    vp = p.allocate_vps()[name]
+    _, d = _dev(port, baud)
+    try:
+        d.write_words(vp, [value & 0xFFFF])
+        return {"name": name, "vp": f"0x{vp:04X}", "value": value}
+    finally:
+        d.port.close()
+
+
+TOOLS = [list_display_profiles, decode_display_part_number, list_widgets, get_widget_schema, list_dgus_controls,
+         search_icons, list_templates, create_project, open_project, get_project, set_display, set_theme,
+         add_variable, update_variable, delete_variable, add_page, update_page, delete_page, duplicate_page,
+         add_element, add_control, update_item, delete_item, arrange, apply_template, render_page, validate, build,
+         list_serial_ports, device_info, device_upload, device_read_variable, device_write_variable]
+
+READ_ONLY = {"list_display_profiles", "decode_display_part_number", "list_widgets", "get_widget_schema",
+             "list_dgus_controls", "search_icons", "list_templates", "get_project", "render_page", "validate",
+             "list_serial_ports", "device_info", "device_read_variable"}
+DESTRUCTIVE = {"delete_page", "delete_item", "delete_variable", "apply_template", "device_upload"}

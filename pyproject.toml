@@ -21,6 +21,7 @@ dependencies = [
   "pillow>=10",
   "pyserial>=3.5",
   "pydantic>=2.7",
+  "mcp>=2.3",
 ]
 
 [project.optional-dependencies]
@@ -29,6 +30,7 @@ dev = ["pytest>=8"]
 [project.scripts]
 opendgus-load = "opendgus.device.dwinload:main"
 opendgus-emu = "opendgus.emulator.dwinemu:main"
+opendgus-mcp = "opendgus.mcp_server:main"
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/opendgus"]
