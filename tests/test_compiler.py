@@ -130,3 +130,19 @@ def test_radio_buttons_show_selected_state(tmp_path):
     assert not near(sel_cool, unsel_heat)
     dev.tap(100, 130)                                        # tap Heat
     assert dev.var("mode") == 0 and near(px(60), sel_cool) and not near(px(250), sel_cool)
+
+
+def test_raw_control_with_bad_field_is_reported_not_crashed(tmp_path):
+    p = Project(display=Display.custom(800, 480))
+    p.pages[0].controls.append(Control(type="raw:rtc_text", x=10, y=10, w=100, h=30, props={"font_y": 32}))
+    r = compile_project(p, tmp_path, write=False)
+    assert not r.ok and any("font_y" in str(i) for i in r.issues)
+
+
+def test_needle_widget_compiles_to_icon_rotation(tmp_path):
+    p = Project(display=Display.custom(800, 480), variables=[Variable(name="a", init=50)])
+    p.pages[0].controls.append(Control(type="needle", var="a", x=100, y=100, w=240, h=240, props={"max": 100}))
+    r = compile_project(p, tmp_path)
+    assert r.ok, [str(i) for i in r.issues]
+    key, v = S.decode(C.parse_14((tmp_path / "build" / "DWIN_SET" / "14.bin").read_bytes())[0][0])
+    assert key == "icon_rotation" and v["xc"] == 220 and v["yc"] == 220 and v["al_end"] - v["al_begin"] == 540

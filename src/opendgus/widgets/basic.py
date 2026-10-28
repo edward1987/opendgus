@@ -457,3 +457,80 @@ class Slider(Widget):
                                            v_begin=vb, v_end=ve)),
                 Record("slider_display", dict(vp=vp, v_begin=p.min, v_end=p.max, icon=knob, icon_lib=ctx.icon_lib,
                                               mode=1, **moving))]
+
+
+# ------------------------------------------------------------------ needle gauge (icon rotation)
+
+class NeedleProps(Props):
+    min: int = 0
+    max: int = 100
+    start_angle: int = Field(225, description="Angle of min, degrees clockwise from 12 o'clock (225 = bottom-left)")
+    sweep: int = Field(270, ge=10, le=360, description="Degrees from min to max, clockwise")
+    color: str = "accent"
+    dial: bool = Field(True, description="Draw a dial with ticks under the needle")
+    ticks: int = Field(10, ge=0, le=60)
+    track: str = "surface2"
+
+
+@widget
+class Needle(Widget):
+    key = "needle"
+    title = "Needle gauge"
+    category = "display"
+    doc = ("Analog gauge: a needle rotated by the display firmware (icon_rotation) over a drawn dial. Smooth for "
+           "any range (no frame per value).")
+    needs_var = True
+    verified = "csharp"
+    props_model = NeedleProps
+
+    def draw(self, ctx, c, img, pressed=False):
+        p = self.props(c)
+        if not p.dial:
+            return
+        size = min(c.w, c.h)
+        cx, cy = c.x + c.w / 2, c.y + c.h / 2
+        r = size / 2
+        ss = 3
+        lay = Image.new("RGBA", (c.w * ss, c.h * ss), (0, 0, 0, 0))
+        d = ImageDraw.Draw(lay)
+        t = max(3, size // 22)
+        box = ((cx - c.x - r + t) * ss, (cy - c.y - r + t) * ss, (cx - c.x + r - t) * ss, (cy - c.y + r - t) * ss)
+        a0 = p.start_angle - 90                  # PIL: 0 deg = 3 o'clock
+        d.arc(box, a0, a0 + p.sweep, fill=ctx.rgb(p.track), width=t * ss)
+        for i in range(p.ticks + 1):
+            ang = math.radians(a0 + p.sweep * i / max(1, p.ticks))
+            r1, r2 = (r - t * 2.5) * ss, (r - t * 4.5) * ss
+            ox, oy = (cx - c.x) * ss, (cy - c.y) * ss
+            d.line((ox + r1 * math.cos(ang), oy + r1 * math.sin(ang), ox + r2 * math.cos(ang), oy + r2 * math.sin(ang)),
+                   fill=ctx.rgb("muted"), width=max(2, t // 2) * ss)
+        img.alpha_composite(lay.resize((c.w, c.h), Image.LANCZOS), (c.x, c.y)) if img.mode == "RGBA" else \
+            img.paste(lay.resize((c.w, c.h), Image.LANCZOS), (c.x, c.y), lay.resize((c.w, c.h), Image.LANCZOS))
+        hub = max(6, size // 14)
+        ctx.r.ellipse(img, (int(cx - hub), int(cy - hub), int(cx + hub), int(cy + hub)), p.color)
+
+    def needle_art(self, ctx, c) -> tuple[Image.Image, int, int]:
+        """Needle pointing up on pure black (black is filtered out by the firmware in transparent mode)."""
+        p = self.props(c)
+        size = min(c.w, c.h)
+        length = int(size / 2 * 0.8)
+        w = max(6, size // 18)
+        ss = 3
+        im = Image.new("RGB", (w * ss, (length + w) * ss), (0, 0, 0))
+        col = ctx.rgb(p.color)
+        col = tuple(max(24, v) for v in col)     # never pure black, or it would be filtered
+        ImageDraw.Draw(im).polygon([(w * ss / 2, 0), (w * ss - 1, length * ss), (w * ss / 2, (length + w) * ss - 1),
+                                    (0, length * ss)], fill=col)
+        im = im.resize((w, length + w), Image.LANCZOS)
+        return im, w // 2, length                # rotation centre inside the icon
+
+    def expand(self, ctx, c):
+        p = self.props(c)
+        vp = ctx.require_var(c)
+        im, icx, icy = self.needle_art(ctx, c)
+        icon = ctx.icon(im)
+        # icon_rotation angles: 0-720 in 0.5 degree units, 0 = needle pointing up, clockwise
+        a0 = (p.start_angle % 360) * 2
+        return [Record("icon_rotation", dict(vp=vp, icon=icon, icon_xc=icx, icon_yc=icy, xc=c.x + c.w // 2,
+                                             yc=c.y + c.h // 2, v_begin=p.min, v_end=p.max, al_begin=a0,
+                                             al_end=a0 + p.sweep * 2, icon_lib=ctx.icon_lib, mode=0,
+                                             filter_set=0x10))]

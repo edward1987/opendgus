@@ -181,6 +181,7 @@ def _raw_record(ctx: Context, c: Control) -> Record:
             vals.setdefault("y", c.y)
     if c.var and "vp" in names:
         vals.setdefault("vp", ctx.require_var(c))
+    S.encode(key, screen=(ctx.p.display.width, ctx.p.display.height), **vals)   # report bad fields early
     return Record(key, vals)
 
 
