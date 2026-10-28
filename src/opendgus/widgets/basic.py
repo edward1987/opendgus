@@ -49,6 +49,9 @@ class ButtonProps(Props):
     radius: Optional[int] = None
     font_size: Optional[int] = None
     action: Union[PageAction, SetAction, StepAction, KeyAction, None] = Field(None, discriminator="type")
+    selected_color: Optional[str] = Field(None, description="Set actions only: while the variable equals the "
+                                          "value, show the button filled in this colour (radio / segmented buttons)")
+    selected_text_color: Optional[str] = None
 
 
 @widget
@@ -93,10 +96,27 @@ class Button(Widget):
         else:
             r.text(img, (c.x, c.y, c.w, c.h), p.label, None, fs, "semibold", fg, "center", "middle")
 
+    def selected_art(self, ctx, c) -> Image.Image:
+        """The button drawn in its 'selected' look on its own background (used as a var_icon)."""
+        p = self.props(c)
+        img = ctx.base_crop(c).convert("RGBA")
+        local = c.model_copy(update={"x": 0, "y": 0, "props": {
+            **c.props, "style": "filled", "color": p.selected_color,
+            "text_color": p.selected_text_color or "on_primary"}})
+        self.draw(ctx, local, img)
+        return img.convert("RGB")
+
     def expand(self, ctx, c):
         p = self.props(c)
         a = p.action
         area = dict(page=ctx.page.id, **touch_area(c), pic_on=ctx.press_page(ctx.page.id))
+        if p.selected_color and isinstance(a, SetAction):
+            vp = ctx.require_var(c)
+            sel = ctx.icon(self.selected_art(ctx, c))
+            v = a.value & 0xFFFF
+            return [Record("return_key", dict(area, vp=vp, key_code=v)),
+                    Record("var_icon", dict(vp=vp, x=c.x, y=c.y, v_min=v, v_max=v, icon_min=sel, icon_max=sel,
+                                            icon_lib=ctx.icon_lib, mode=1))]
         if a is None or isinstance(a, KeyAction):
             return [Record("basic_touch", dict(area, key_code=a.code if a else 0xFF00))]
         if isinstance(a, PageAction):
@@ -140,8 +160,8 @@ class Toggle(Widget):
             r.rect(img, (0, 0, w - 1, h - 1), p.on_color if on else p.off_color, radius=ctx.theme.radius)
             fg = "#18181B" if on else "text"
             sub = "#45340A" if on else "muted"
-            pad = max(12, min(w, h) // 9)
-            isz = max(28, min(w, h) // 3)
+            pad = max(6, min(w, h) // 9)
+            isz = max(14, min(w, h) // 3)
             if p.icon:
                 r.ellipse(img, (pad, pad, pad + isz, pad + isz), "#FFFFFF" if on else "surface2")
                 r.icon(img, (pad + isz // 5, pad + isz // 5, isz * 3 // 5, isz * 3 // 5), p.icon,
@@ -152,7 +172,7 @@ class Toggle(Widget):
             k = sh - 8
             kx = sx + sw - 4 - k if on else sx + 4
             r.ellipse(img, (kx, sy + 4, kx + k, sy + 4 + k), p.on_color if on else "muted")
-            fs = max(14, min(h // 6, w // 8))
+            fs = max(9, min(h // 6, w // 8))
             r.text(img, (pad, h - pad - fs * 2 - 6, w - 2 * pad, fs + 6), p.label, None, fs, "bold", fg)
             r.text(img, (pad, h - pad - fs + 2, w - 2 * pad, fs), p.sublabel, None, max(11, fs * 2 // 3),
                    "regular", sub)

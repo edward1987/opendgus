@@ -269,7 +269,11 @@ def _draw_initial_state(ctx: Context, c: Control, img: Image.Image) -> None:
     w = get_widget(c.type)
     var = ctx.var_of(c)
     v = int(var.init) if var.type != "text" else 0
-    if isinstance(w, B.Toggle):
+    if isinstance(w, B.Button):
+        p = w.props(c)
+        if p.selected_color and isinstance(p.action, B.SetAction) and v == p.action.value:
+            img.paste(w.selected_art(ctx, c), (c.x, c.y))
+    elif isinstance(w, B.Toggle):
         img.paste(w.art(ctx, c, bool(v)), (c.x, c.y))
     elif isinstance(w, B.Progress):
         p = w.props(c)

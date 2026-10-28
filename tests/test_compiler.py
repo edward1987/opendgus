@@ -111,3 +111,22 @@ def test_vertical_slider_minimum_at_bottom(tmp_path):
     knob = next(S.decode(x)[1] for recs in C.parse_14((out / "14.bin").read_bytes()).values() for x in recs)
     assert drag["v_begin"] == 100 and drag["v_end"] == 0           # top of the track = max
     assert knob["v_begin"] == 0 and knob["x_begin"] > knob["x_end"]  # min value -> knob at the bottom
+
+
+def test_radio_buttons_show_selected_state(tmp_path):
+    from opendgus.emulator import Device
+    p = Project(display=Display.custom(800, 480), variables=[Variable(name="mode", init=1)])
+    for i, label in enumerate(["Heat", "Cool", "Off"]):
+        p.pages[0].controls.append(Control(type="button", var="mode", x=40 + i * 200, y=100, w=180, h=70, props={
+            "label": label, "style": "outline", "selected_color": "primary",
+            "action": {"type": "set", "value": i}}))
+    r = compile_project(p, tmp_path)
+    assert r.ok, [str(i) for i in r.issues]
+    dev = Device.from_folder(r.out_dir)
+    px = lambda x: dev.render().getpixel((x, 105))[:3]
+    sel_cool, unsel_heat = px(250), px(60)                 # Cool selected at power-on (init=1)
+    assert sel_cool != unsel_heat
+    near = lambda a, b: max(abs(i - j) for i, j in zip(a, b)) < 16      # JPEG tolerance
+    assert not near(sel_cool, unsel_heat)
+    dev.tap(100, 130)                                        # tap Heat
+    assert dev.var("mode") == 0 and near(px(60), sel_cool) and not near(px(250), sel_cool)
