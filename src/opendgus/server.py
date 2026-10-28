@@ -61,7 +61,7 @@ def encode_result(out: Any) -> Any:
 def create_app(token: str = TOKEN) -> FastAPI:
     app = FastAPI(title="OpenDGUS", version=__version__)
     app.add_middleware(CORSMiddleware, allow_origins=["http://localhost:5173", "http://127.0.0.1:5173", "null"],
-                       allow_methods=["*"], allow_headers=["*"])
+                       allow_methods=["*"], allow_headers=["*"], expose_headers=["X-OpenDGUS-Issues"])
     tools = {fn.__name__: fn for fn in T.TOOLS}
 
     @app.middleware("http")

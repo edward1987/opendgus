@@ -1,0 +1,50 @@
+{
+  "name": "opendgus-editor",
+  "productName": "OpenDGUS",
+  "version": "0.6.0",
+  "private": true,
+  "description": "OpenDGUS desktop editor for DWIN T5L (DGUS II) touch displays",
+  "license": "GPL-3.0-only",
+  "main": "dist-electron/main.js",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "build": "npm run build:electron && npm run build:renderer",
+    "build:renderer": "vite build",
+    "build:electron": "tsc -p tsconfig.electron.json",
+    "start": "electron .",
+    "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
+    "test": "vitest run",
+    "smoke": "node scripts/smoke.mjs",
+    "dist": "npm run build && electron-builder"
+  },
+  "dependencies": {
+    "i18next": "26.4.2",
+    "konva": "10.7.1",
+    "react": "19.3.0",
+    "react-dom": "19.3.0",
+    "react-i18next": "17.0.15",
+    "react-konva": "19.3.0",
+    "zustand": "5.0.15"
+  },
+  "devDependencies": {
+    "@types/node": "24.19.2",
+    "@types/react": "19.3.0",
+    "@types/react-dom": "19.3.0",
+    "@vitejs/plugin-react": "6.1.1",
+    "electron": "43.7.10",
+    "electron-builder": "26.16.1",
+    "typescript": "6.0.3",
+    "vite": "8.3.4",
+    "vitest": "5.0.3"
+  },
+  "build": {
+    "appId": "org.opendgus.editor",
+    "productName": "OpenDGUS",
+    "directories": { "output": "release" },
+    "files": ["dist/**", "dist-electron/**", "package.json"],
+    "extraResources": [{ "from": "../src", "to": "backend/src" }],
+    "win": { "target": "nsis" },
+    "linux": { "target": "AppImage" },
+    "mac": { "target": "dmg" }
+  }
+}
