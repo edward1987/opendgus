@@ -1,7 +1,7 @@
 {
   "name": "opendgus-editor",
   "productName": "OpenDGUS",
-  "version": "0.6.1",
+  "version": "0.6.2",
   "private": true,
   "description": "OpenDGUS desktop editor for DWIN T5L (DGUS II) touch displays",
   "license": "GPL-3.0-only",

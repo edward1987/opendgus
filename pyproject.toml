@@ -4,7 +4,7 @@ build-backend = "hatchling.build"
 
 [project]
 name = "opendgus"
-version = "0.6.1"
+version = "0.6.2"
 description = "Open-source designer and toolkit for DWIN T5L (DGUS II) smart displays"
 readme = "README.md"
 license = "GPL-3.0-or-later"
