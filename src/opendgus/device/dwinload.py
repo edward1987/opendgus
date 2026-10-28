@@ -298,6 +298,22 @@ class Dgus:
         self._send(0x82, (0x0004).to_bytes(2, "big") + words_to_bytes([0x55AA, 0x5AA5]))
 
 
+def set_standby(d: Dgus, enabled: bool, level: int = 10, timeout_s: int = 60, backlight: int = 100) -> None:
+    """Auto-dim at run time (not saved; T5LCFG.CFG only takes effect from an SD card). Hardware-verified on a
+    1024x600 T5L (fw 0x5120): dims at once if the last touch is older than the timeout; 0x0031 = 5A + level.
+
+    0x0082 LED_Config = on %, standby %, time in 10 ms; 0x0080 System_Config: D3 = 0x5A apply, D0 = live copy of
+    CFG 0x05, bit .2 = touch backlight standby. Read-modify-write so the other 0x05 bits stay as they are."""
+    on, idle = max(0, min(100, backlight)), max(0, min(100, level))
+    ticks = max(1, min(0xFFFF, int(timeout_s * 100)))
+    d.write_words(0x0082, [(on << 8) | idle, ticks])
+    hi, lo = d.read_words(0x0080, 2)
+    lo = (lo | 0x04) if enabled else (lo & ~0x04 & 0xFFFF)
+    d.write_words(0x0080, [0x5A00 | (hi & 0xFF), lo])
+    if not enabled:
+        d.write(0x0082, bytes([on]))     # verified: a dimmed panel stays dim until the 1-byte brightness write
+
+
 def open_port(a):
     import serial  # pyserial
     return serial.Serial(a.port, a.baud, timeout=0.05)
@@ -538,6 +554,11 @@ def main(argv=None) -> int:
     p = sub.add_parser("ping", help="read the firmware version and current page"); serial_opts(p)
     p = sub.add_parser("page", help="switch page"); serial_opts(p); p.add_argument("n", type=int)
     p = sub.add_parser("backlight", help="set backlight 0-100"); serial_opts(p); p.add_argument("level", type=int)
+    p = sub.add_parser("standby", help="auto-dim after a timeout (until power-off): standby LEVEL SECONDS, "
+                                       "or standby off"); serial_opts(p)
+    p.add_argument("level", help="idle backlight 0-100, or 'off'"); p.add_argument("seconds", type=int, nargs="?",
+                                                                                    default=60)
+    p.add_argument("--on", type=int, default=100, help="normal backlight 0-100")
     p = sub.add_parser("reset", help="reset the screen"); serial_opts(p)
     p = sub.add_parser("read", help="read words: read VP COUNT"); serial_opts(p)
     p.add_argument("vp", type=parse_int); p.add_argument("count", type=int, nargs="?", default=1)
@@ -563,6 +584,9 @@ def main(argv=None) -> int:
             d.write_words(0x0084, [0x5A01, a.n])
         elif a.cmd == "backlight":
             d.write(0x0082, bytes([max(0, min(100, a.level))]))
+        elif a.cmd == "standby":
+            off = a.level.lower() == "off"
+            set_standby(d, not off, 0 if off else int(a.level), a.seconds, a.on)
         elif a.cmd == "reset":
             d.reset()
         elif a.cmd == "read":

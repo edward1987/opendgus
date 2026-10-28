@@ -209,6 +209,12 @@ function PageProperties() {
         <NumberInput value={d.backlight} min={0} max={100} onChange={(n) => n !== null && st().commit({ ...st().project!, display: { ...st().project!.display, backlight: n } }, "backlight")} />
         <span className="unit">%</span>
       </Row>
+      <Row label={t("settings.autoDim")}>
+        <button className="link small" onClick={() => st().setDialog("settings")}>
+          {d.standby?.enabled ? t("props.dimSummary", { level: d.standby.level, s: d.standby.timeout_s }) : t("props.off")}
+          {project.screensaver?.enabled ? ` · ${t("settings.screensaver")}` : ""} ›
+        </button>
+      </Row>
       <Row label={t("props.beep")}><Switch checked={!!d.touch_beep} onChange={(v) => st().commit({ ...st().project!, display: { ...st().project!.display, touch_beep: v } })} /></Row>
       <Row label={t("props.baud")}>
         <select value={d.baud} onChange={(e) => st().commit({ ...st().project!, display: { ...st().project!.display, baud: Number(e.target.value) } })}>

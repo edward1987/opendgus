@@ -46,6 +46,11 @@ export function RunView() {
   const imgRef = useRef<HTMLImageElement>(null);
   const [box, setBox] = useState({ w: 0, h: 0 });
   const queue = useRef<Promise<unknown>>(Promise.resolve());
+  // idle simulation in real time: auto-dim (the display) and the screensaver (what the controller does)
+  const lastTouch = useRef(performance.now());
+  const saverFrom = useRef<number | null>(null);
+  const [idleS, setIdleS] = useState(0);
+  const [simController, setSimController] = useState(true);
   const seq = useRef(0);
   const alive = useRef(true);
 
@@ -82,6 +87,69 @@ export function RunView() {
 
   const show = (shot: Shot) => setImage(`data:image/png;base64,${shot.image}`);
 
+  const sb = project.display.standby;
+  const ss = project.screensaver;
+  const saverReady = !!ss?.enabled && ss.page !== null && simController;
+  const onSaver = saverReady && page === ss!.page;
+  const dimmed = !!sb?.enabled && idleS >= sb.timeout_s;
+  const backlight = onSaver && ss!.brightness !== null ? Math.min(ss!.brightness, dimmed ? sb!.level : 100)
+    : dimmed ? sb!.level : project.display.backlight ?? 100;
+
+  const goPage = (n: number, text: string) => enqueue(async () => {
+    try {
+      const shot = await api.tool<Shot>("emulator_set_page", { page: n, scale: 1 });
+      if (!alive.current) return;
+      show(shot);
+      addLog(text, shot.caption);
+    } catch (e) {
+      addLog(errText(e), undefined, undefined, true);
+    }
+  });
+
+  useEffect(() => {
+    if (status !== "ready") return;
+    const id = setInterval(() => setIdleS(Math.floor((performance.now() - lastTouch.current) / 1000)), 250);
+    return () => clearInterval(id);
+  }, [status]);
+
+  // the controller switches to the screensaver page after its timeout
+  useEffect(() => {
+    if (!saverReady || status !== "ready" || page === null || page === ss!.page || idleS < ss!.timeout_s) return;
+    saverFrom.current = page;
+    void goPage(ss!.page!, t("run.saverOn"));
+  }, [idleS >= (ss?.timeout_s ?? Infinity), saverReady, status]);
+
+  // keep an animated screensaver moving
+  useEffect(() => {
+    if (!onSaver || !ss!.frame_pages.length) return;
+    const ms = Math.max(120, ss!.frame_ms);
+    const id = setInterval(() => void enqueue(async () => {
+      try {
+        const shot = await api.tool<Shot>("emulator_wait", { ms, scale: 1 });
+        if (alive.current) show(shot);
+      } catch { /* next frame retries */ }
+    }), ms);
+    return () => clearInterval(id);
+  }, [onSaver, ss?.frame_ms]);
+
+  /** A touch on a dimmed panel or on the screensaver only wakes it (it is not passed to the controls). */
+  const wake = (): boolean => {
+    const wasDim = dimmed;
+    lastTouch.current = performance.now();
+    setIdleS(0);
+    if (onSaver) {
+      const back = ss!.wake_page ?? saverFrom.current ?? 0;
+      saverFrom.current = null;
+      void goPage(back, t("run.saverOff"));
+      return true;
+    }
+    if (wasDim) {
+      addLog(t("run.woke"));
+      return true;
+    }
+    return false;
+  };
+
   const start = useCallback(() => enqueue(async () => {
     setStatus("starting");
     setError(null);
@@ -91,6 +159,9 @@ export function RunView() {
       if (!alive.current) return false;
       show(shot);
       setStartedWith(useStore.getState().project);
+      lastTouch.current = performance.now();
+      saverFrom.current = null;
+      setIdleS(0);
       setLog([]);
       addLog(t("run.started"), shot.caption);
       await refreshState();
@@ -147,6 +218,7 @@ export function RunView() {
 
   const onPointerDown = (e: React.PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0 || status !== "ready" || !imgRef.current) return;
+    if (wake()) return;
     e.currentTarget.setPointerCapture(e.pointerId);
     const r = imgRef.current.getBoundingClientRect();
     const d = toDevice(e.clientX, e.clientY, r, W, H);
@@ -172,7 +244,22 @@ export function RunView() {
           {designChanged && (
             <button className="chip warn-chip" onClick={() => void start()}><Icon name="refresh" size={12} /> {t("run.changed")}</button>
           )}
+          {dimmed && <span className="chip">{t("run.dimmed", { level: backlight })}</span>}
+          {onSaver && <span className="chip">{t("run.saver")}</span>}
           <span className="spacer" />
+          {(sb?.enabled || (ss?.enabled && ss.page !== null)) && (
+            <>
+              {ss?.enabled && ss.page !== null && (
+                <label className="row gap-sm small muted" title={t("run.simControllerHint")}>
+                  <input type="checkbox" checked={simController} onChange={(e) => setSimController(e.target.checked)} /> {t("run.simController")}
+                </label>
+              )}
+              <button className="btn sm" disabled={status !== "ready"} title={t("run.idleHint")}
+                onClick={() => { lastTouch.current = performance.now() - 1000 * Math.max(sb?.enabled ? sb.timeout_s : 0, saverReady ? ss!.timeout_s : 0); setIdleS(Math.floor((performance.now() - lastTouch.current) / 1000)); }}>
+                <Icon name="eyeOff" size={14} /> {t("run.idle")}
+              </button>
+            </>
+          )}
           <span className="muted small">{t("run.hint")}</span>
           <button className="btn sm" onClick={() => void start()} disabled={status === "starting"}><Icon name="refresh" size={14} /> {t("run.restart")}</button>
           <button className="btn sm" onClick={() => useStore.getState().setMode("edit")}><Icon name="close" size={14} /> {t("run.exit")}</button>
@@ -182,6 +269,7 @@ export function RunView() {
             <div className={`run-screen ${busy ? "busy" : ""} ${status !== "ready" ? "dim" : ""}`} style={{ width: fit.w, height: fit.h }}
               onPointerDown={onPointerDown} onPointerUp={onPointerUp} onPointerCancel={() => setPress(null)}>
               <img ref={imgRef} src={image} alt="" draggable={false} />
+              <span className="backlight" style={{ opacity: (100 - backlight) / 100 * 0.92 }} />
               {press && <span className="press-ring" style={{ left: press.cx, top: press.cy }} />}
             </div>
           )}

@@ -42,6 +42,8 @@ export function Toolbar() {
       </div>
       <div className="spacer" />
       <div className="tb-group">
+        <button className="btn ghost" title={t("toolbar.settingsHint")} onClick={() => s().setDialog("settings")}><Icon name="gear" /> {t("toolbar.settings")}</button>
+        <button className="btn ghost" title={t("toolbar.controllerHint")} onClick={() => s().setDialog("controller")}><Icon name="chip" /> {t("toolbar.controller")}</button>
         <button className="btn ghost" onClick={() => s().setDialog("theme")}><Icon name="palette" /> {t("toolbar.theme")}</button>
         <button className="btn ghost" onClick={() => s().setDialog("validate")}><Icon name="check" /> {t("toolbar.validate")}</button>
         <button className="btn ghost" onClick={() => s().setDialog("build")}><Icon name="build" /> {t("toolbar.build")}</button>

@@ -19,7 +19,7 @@ from .. import widgets as W
 from ..compiler import compile_project
 from ..formats import spec as S
 from ..formats import specs as _specs  # noqa: F401
-from ..model import Background, Control, Display, Element, Page, Project, Theme, Variable
+from ..model import Background, Control, Display, Element, Page, Project, Standby, Theme, Variable
 from ..profiles import PROFILES, decode_part_number
 from ..render.fonts import search_icons as _search_icons
 
@@ -160,7 +160,7 @@ def get_project(page: Optional[int] = None) -> dict:
     p = SESSION.load()
     d = p.model_dump(mode="json", exclude_defaults=True)
     full = p.model_dump(mode="json")
-    for key in ("name", "display", "theme", "variables", "pages"):   # top-level sections are always present
+    for key in ("name", "display", "theme", "variables", "pages", "screensaver"):   # always present
         d.setdefault(key, full[key])
     if page is not None:
         d["pages"] = [pg for pg in d["pages"] if pg["id"] == page]
@@ -168,17 +168,27 @@ def get_project(page: Optional[int] = None) -> dict:
 
 
 def set_display(profile: str = "", width: int = 0, height: int = 0, rotation: Optional[int] = None,
-                backlight: Optional[int] = None, baud: Optional[int] = None) -> dict:
-    """Change the target display (profile or width/height) and device options. Existing layout is not rescaled."""
+                backlight: Optional[int] = None, baud: Optional[int] = None, standby_enabled: Optional[bool] = None,
+                standby_level: Optional[int] = None, standby_timeout_s: Optional[int] = None) -> dict:
+    """Change the target display (profile or width/height) and device options. Existing layout is not rescaled.
+    standby_*: auto-dim done by the display itself (backlight standby_level % after standby_timeout_s seconds
+    without a touch, max 655 s; a touch wakes it)."""
     with SESSION.lock:
         p = SESSION.load()
+        keep = p.display.standby
         if profile:
             p.display = Display.from_profile(profile)
         elif width and height:
             p.display = Display.custom(width, height)
+        p.display.standby = keep
         for k, v in (("rotation", rotation), ("backlight", backlight), ("baud", baud)):
             if v is not None:
                 setattr(p.display, k, v)
+        sb = p.display.standby.model_dump()
+        for k, v in (("enabled", standby_enabled), ("level", standby_level), ("timeout_s", standby_timeout_s)):
+            if v is not None:
+                sb[k] = v
+        p.display.standby = Standby.model_validate(sb)
         SESSION.save(p)
         return p.display.model_dump()
 
@@ -201,6 +211,52 @@ def set_theme(colors: Optional[dict[str, str]] = None, font: str = "", radius: O
         p.theme = Theme.model_validate(t)
         SESSION.save(p)
         return p.theme.model_dump()
+
+
+def set_screensaver(image: str = "", enabled: Optional[bool] = None, timeout_s: Optional[int] = None,
+                    frame_ms: Optional[int] = None, wake_page: Optional[int] = None,
+                    brightness: Optional[int] = None, remove: bool = False) -> dict:
+    """Screensaver shown by the controller after timeout_s without a touch (a touch goes back). image: assets/...
+    picture or animated GIF (absolute paths are copied in); it (re)builds the screensaver page(s). wake_page -1 =
+    back to the page that was showing; brightness -1 = unchanged. remove=True deletes the pages. The stock display
+    firmware cannot do this alone: generate_controller_project adds the code."""
+    from .. import screensaver as SS
+    with SESSION.lock:
+        p = SESSION.load()
+        if remove:
+            SS.remove(p)
+        elif image:
+            try:
+                SS.apply(p, SESSION.require(), image, timeout_s=timeout_s, frame_ms=frame_ms,
+                         wake_page=None if wake_page in (None, -1) else wake_page,
+                         brightness=None if brightness in (None, -1) else brightness)
+            except (FileNotFoundError, OSError) as e:
+                raise ToolError(f"cannot use {image!r} as screensaver: {e}")
+        ss = p.screensaver.model_dump()
+        for k, v in (("enabled", enabled), ("timeout_s", timeout_s), ("frame_ms", frame_ms)):
+            if v is not None and not (image and k != "enabled"):
+                ss[k] = v
+        if not image:
+            if wake_page is not None:
+                ss["wake_page"] = None if wake_page == -1 else wake_page
+            if brightness is not None:
+                ss["brightness"] = None if brightness == -1 else brightness
+        if ss["enabled"] and ss["page"] is None:
+            raise ToolError("no screensaver page yet: pass image='assets/...' first")
+        p.screensaver = type(p.screensaver).model_validate(ss)
+        if not image and frame_ms is not None and p.screensaver.page is not None:
+            for c in p.page(p.screensaver.page).controls:
+                if c.type == "raw:image_animation":
+                    c.props = {**c.props, "frame_time": max(1, round(frame_ms / 8))}
+        if p.screensaver.page is not None:                     # keep the no-controller exit in sync
+            wake = p.screensaver.wake_page
+            home = min((pg.id for pg in p.pages if pg.id != p.screensaver.page
+                        and pg.id not in p.screensaver.frame_pages), default=0)
+            for c in p.page(p.screensaver.page).controls:
+                if c.type == "raw:basic_touch":
+                    c.props = {**c.props, "pic_next": home if wake is None else wake}
+        SESSION.save(p)
+        return p.screensaver.model_dump()
 
 
 # ======================================================================= variables
@@ -497,6 +553,24 @@ def emulator_set_variable(name: str, value: int, scale: float = 0.5) -> ToolImag
     return _emu_shot(dev, scale, json.dumps({"page": dev.state().get("page"), name: dev.var(name)}))
 
 
+def emulator_wait(ms: int, scale: float = 0.5) -> ToolImage:
+    """Let virtual time pass without touching the screen (animations play, auto-dim kicks in). Returns a
+    screenshot; the caption has the page and the backlight %."""
+    dev = _emu()
+    dev.tick(max(0, min(int(ms), 24 * 3600 * 1000)))
+    st = dev.state()
+    return _emu_shot(dev, scale, json.dumps({"page": st["page"], "backlight": st["backlight"],
+                                             "dimmed": st["dimmed"]}))
+
+
+def emulator_set_page(page: int, scale: float = 0.5) -> ToolImage:
+    """Switch page as the MCU does (VP 0x0084 = 5A01 + page), e.g. to show the screensaver page."""
+    dev = _emu()
+    dev.write_vp(0x0084, [0x5A01, page])
+    dev.tick(20)
+    return _emu_shot(dev, scale, json.dumps({"page": dev.state().get("page")}))
+
+
 def emulator_state() -> dict:
     """Current emulator state: page, all variables, and the UART frames the display has sent."""
     dev = _emu()
@@ -590,13 +664,38 @@ def device_upload(port: str, confirm: bool = False, baud: int = 115200) -> dict:
                 log.append(f"{name} -> slot {f['slot']} ({len(data)} bytes)")
             status("reset", done=total, file=None)
             d.reset()
+            sb = p.display.standby
+            if sb.enabled:                   # the CFG is not sent over UART: apply auto-dim until power-off
+                time.sleep(3.0)
+                try:
+                    dl.set_standby(d, True, sb.level, sb.timeout_s, p.display.backlight)
+                    log.append(f"auto-dim {sb.level}% after {sb.timeout_s} s (until power-off)")
+                except Exception as e:
+                    log.append(f"auto-dim not applied: {e}")
         finally:
             d.port.close()
     except Exception as e:
         status("error", error=str(e))
         raise
     status("done")
-    return {"uploaded": log, "note": "T5LCFG.CFG is only applied from an SD card"}
+    return {"uploaded": log, "note": "T5LCFG.CFG (incl. auto-dim) is only stored from an SD card; over UART the "
+                                     "controller should call setStandby() at boot"}
+
+
+def device_set_standby(port: str, enabled: bool = True, level: Optional[int] = None,
+                       timeout_s: Optional[int] = None, baud: int = 115200) -> dict:
+    """Turn auto-dim on/off on the connected display right now (until power-off). level/timeout_s default to the
+    project's display.standby settings."""
+    p = SESSION.load()
+    sb = p.display.standby
+    lvl = sb.level if level is None else level
+    tmo = sb.timeout_s if timeout_s is None else timeout_s
+    dl, d = _dev(port, baud)
+    try:
+        dl.set_standby(d, enabled, lvl, tmo, p.display.backlight)
+        return {"enabled": enabled, "level": lvl, "timeout_s": tmo, "backlight_now": d.read_words(0x0031, 1)[0] & 0xFF}
+    finally:
+        d.port.close()
 
 
 def device_read_variable(port: str, name: str, baud: int = 115200) -> dict:
@@ -624,10 +723,12 @@ def device_write_variable(port: str, name: str, value: int, baud: int = 115200) 
 
 TOOLS = [list_display_profiles, decode_display_part_number, list_widgets, get_widget_schema, list_dgus_controls,
          search_icons, list_templates, create_project, open_project, get_project, set_display, set_theme,
+         set_screensaver,
          add_variable, update_variable, delete_variable, add_page, update_page, delete_page, duplicate_page,
          add_element, add_control, update_item, delete_item, arrange, apply_template, render_page, validate, build,
-         emulator_start, emulator_tap, emulator_set_variable, emulator_state,
-         list_serial_ports, device_info, device_upload, device_read_variable, device_write_variable]
+         emulator_start, emulator_tap, emulator_set_variable, emulator_wait, emulator_set_page, emulator_state,
+         list_serial_ports, device_info, device_upload, device_read_variable, device_write_variable,
+         device_set_standby]
 
 READ_ONLY = {"list_display_profiles", "decode_display_part_number", "list_widgets", "get_widget_schema",
              "list_dgus_controls", "search_icons", "list_templates", "get_project", "render_page", "validate",

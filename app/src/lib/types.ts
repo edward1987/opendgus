@@ -3,12 +3,31 @@
 export type Json = null | boolean | number | string | Json[] | { [k: string]: Json };
 export type JsonSchema = { [k: string]: any };
 
+export interface Standby {
+  enabled: boolean;
+  level: number;
+  timeout_s: number;
+}
+
 export interface Display {
   profile: string | null;
   width: number;
   height: number;
   rotation: 0 | 90 | 180 | 270;
+  backlight?: number;
+  standby?: Standby;
   [k: string]: any;
+}
+
+export interface Screensaver {
+  enabled: boolean;
+  timeout_s: number;
+  page: number | null;
+  frame_pages: number[];
+  frame_ms: number;
+  source: string | null;
+  wake_page: number | null;
+  brightness: number | null;
 }
 
 export interface Theme {
@@ -81,6 +100,7 @@ export interface Project {
   theme: Theme;
   variables: Variable[];
   pages: Page[];
+  screensaver?: Screensaver;
 }
 
 export interface WidgetInfo {

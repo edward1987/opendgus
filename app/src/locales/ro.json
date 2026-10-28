@@ -69,7 +69,11 @@
     "language": "Limbă",
     "run": "Rulează",
     "runHint": "Încercați designul în emulatorul de display",
-    "exitRun": "Înapoi la editare"
+    "exitRun": "Înapoi la editare",
+    "settings": "Setări",
+    "settingsHint": "Iluminare, estompare automată și screensaver",
+    "controller": "Controler",
+    "controllerHint": "Cod pentru Arduino, Pico, ESP32 sau PC care comandă acest ecran"
   },
   "status": {
     "saved": "Toate modificările sunt salvate",
@@ -204,7 +208,9 @@
     "profile": "Model",
     "backlight": "Iluminare",
     "beep": "Sunet la atingere",
-    "baud": "Viteză serială"
+    "baud": "Viteză serială",
+    "dimSummary": "{{level}}% după {{s}} s",
+    "off": "Oprit"
   },
   "align": {
     "left": "Aliniază la stânga",
@@ -463,7 +469,16 @@
     "noChange": "nicio schimbare",
     "toPage": "pagina {{page}}",
     "changed": "Designul s-a schimbat: reporniți ca să-l aplicați",
-    "invalidValue": "Introduceți un număr întreg"
+    "invalidValue": "Introduceți un număr întreg",
+    "dimmed": "estompat · {{level}}%",
+    "saver": "screensaver",
+    "woke": "Atingerea a trezit ecranul",
+    "saverOn": "Controler: screensaver (inactiv)",
+    "saverOff": "Controler: atingere, revenire din screensaver",
+    "simController": "Simulează controlerul",
+    "simControllerHint": "Face ce face codul generat pentru controler: afișează screensaver-ul când e inactiv și revine la atingere",
+    "idle": "Inactiv acum",
+    "idleHint": "Simulează că nimeni n-a atins ecranul de mult timp"
   },
   "mcp": {
     "title": "Conectați o aplicație AI (MCP)",
@@ -483,5 +498,30 @@
     "copy": "Copiază",
     "copied": "Copiat",
     "done": "Gata"
+  },
+  "settings": {
+    "title": "Setările proiectului",
+    "power": "Iluminare și estompare automată",
+    "autoDim": "Estompare automată",
+    "dimTo": "Estompează la",
+    "dimAfter": "După ce nu e atins timp de",
+    "dimHint": "Ecranul se estompează singur (nu e nevoie de controler), iar următoarea atingere doar îl trezește. Setarea e salvată în T5LCFG.CFG, pe care ecranul îl citește de pe cardul SD. După o încărcare prin USB/UART rămâne activă până la oprire; codul generat pentru controler o reactivează la fiecare pornire. Timp maxim: 655 s.",
+    "screensaver": "Screensaver",
+    "chooseImage": "Alege imagine sau GIF…",
+    "changeImage": "Schimbă imaginea…",
+    "removeSaver": "Șterge",
+    "noImage": "Nicio imagine",
+    "imageHint": "O imagine sau un GIF animat (până la 30 de cadre), scalat pe tot ecranul. Fiecare cadru e o imagine pe tot ecranul în memoria flash a ecranului.",
+    "frames": "{{count}} cadre",
+    "saverOn": "Activat",
+    "saverAfter": "Apare după ce nu e atins timp de",
+    "frameTime": "Timp pe cadru",
+    "applyFrame": "Aplică",
+    "wake": "După atingere mergi la",
+    "wakePrevious": "Pagina afișată înainte",
+    "saverBrightness": "Iluminare cât e afișat",
+    "unchanged": "neschimbată",
+    "saverNeedsController": "Firmware-ul ecranului nu poate schimba singur pagina, așa că screensaver-ul e afișat și ascuns de controler. Codul generat (Arduino, Pico, ESP32, Raspberry Pi) face deja asta. Fără controler, pagina de screensaver funcționează ca o pagină obișnuită: o atingere o părăsește.",
+    "openController": "Cod pentru controler…"
   }
 }

@@ -14,6 +14,8 @@ Fidelity levels (see Device.notes at run time for what a given page used):
                               zone_brightness, icon_overlay, icon_page_trans, analog_clock, return_key, drag_adjust,
                               bit_button, rotate_adjust, swipe_adjust, swipe_page, data/text inputs (enter_value),
                               popup_menu, rtc_input, sync_return, SP descriptions, system VPs 0x0014 / 0x0084 / 0x009C
+  hardware-checked behaviour  auto-dim (CFG 0x05.2 / 0x0082 / 0x0080, 0x0031 level), 0x0016 touch status
+  assumed                     the touch that wakes a dimmed panel is not passed to the controls
   approximated                font-based controls (data_var, text_display, dgus2_text, rtc_text, hex_data,
                               scroll_text, data_window) use a TTF stand-in for the DWIN font libraries
   placeholder                 everything else is drawn as a dashed box with its name
@@ -41,6 +43,10 @@ from ..formats import specs as _specs  # noqa: F401  (registers the control spec
 
 SYS_RTC = 0x0010             # 4 words: YY MM DD WW HH MM SS 00 (read only)
 SYS_PAGE = 0x0014            # current page id (read only)
+SYS_TP_STATUS = 0x0016       # 5A flag + state (1 press, 2 lift, 3 hold), X, Y; the MCU clears the flag
+SYS_LED_NOW = 0x0031         # 5A + current backlight % (read only)
+SYS_CONFIG = 0x0080          # D3 = 5A apply, D0 = live copy of CFG 0x05 (bit .2 = backlight standby)
+SYS_LED_CFG = 0x0082         # on %, standby %, standby time (10 ms); a 1-byte write sets the brightness
 SYS_PIC_SET = 0x0084         # 5A01 + page id -> switch page; the device clears the 5A byte when done
 SYS_RTC_SET = 0x009C         # 5AA5 YY MM DD HH MM SS -> set the clock
 INIT_OFFSET = 0x2000         # 22.bin byte offset of VP 0x1000 (byte offset = VP * 2)
@@ -244,6 +250,10 @@ class Device:
         cfg_ok = self.cfg[:5] == b"T5LC1" and len(self.cfg) > 8
         self.auto_upload = bool(self.cfg[5] & 0x10) if cfg_ok else True
         self.load_22 = bool(self.cfg[5] & 0x20) if cfg_ok else True
+        self.cfg_flags = self.cfg[5] if cfg_ok else 0x38
+        full = cfg_ok and len(self.cfg) >= 0x10
+        self.cfg_backlight = (self.cfg[0x0C] if full else 100, self.cfg[0x0D] if full else 0,
+                              int.from_bytes(self.cfg[0x0E:0x10], "big") if full else 0)
         bg = self._req_bg if self._req_bg is not None else (self.cfg[8] if cfg_ok else None)
         if bg not in self.libs:
             bg = next((n for n in (32, 23) if n in self.libs), min(self.libs) if self.libs else 32)
@@ -308,6 +318,13 @@ class Device:
         self.ms = 0
         self._changed: dict[int, int] = {}
         self.pressed: Optional[dict] = None
+        self.last_touch_ms = 0
+        on, idle, ticks = self.cfg_backlight
+        self.vp[SYS_CONFIG] = 0x0000
+        self.vp[SYS_CONFIG + 1] = self.cfg_flags
+        self.vp[SYS_LED_CFG] = (on << 8) | idle
+        self.vp[SYS_LED_CFG + 1] = ticks
+        self.brightness = on
         self.pending_input: Optional[dict] = None
         self.rtc_base = rtc or _dt.datetime.now().replace(microsecond=0)
         pages = self.pages()
@@ -341,7 +358,8 @@ class Device:
                 | {"control": self.pressed["ctl"].key if self.pressed["ctl"] else None},
                 "pending_input": None if not self.pending_input else
                 {k: v for k, v in self.pending_input.items() if k != "ctl"},
-                "uploads": len(self.uploads), "rtc": self.rtc().isoformat()}
+                "uploads": len(self.uploads), "rtc": self.rtc().isoformat(), "backlight": self.backlight(),
+                "dimmed": self.dimmed()}
 
     def controls(self, page: Optional[int] = None) -> list[dict]:
         """Decoded touch and display controls of a page, in file order."""
@@ -362,6 +380,8 @@ class Device:
     def read_vp(self, vp: int, n: int = 1) -> list[int]:
         if SYS_RTC <= vp + n - 1 and vp <= SYS_RTC + 3:
             self._sync_rtc()
+        if vp <= SYS_LED_NOW < vp + n:
+            self.vp[SYS_LED_NOW] = 0x5A00 | self.backlight()
         return [self.vp[(vp + i) & 0xFFFF] for i in range(n)]
 
     def word(self, vp: int, signed: bool = False) -> int:
@@ -379,6 +399,10 @@ class Device:
             if self.vp[SYS_PIC_SET] & 0xFF == 0x01:
                 self.set_page(self.vp[SYS_PIC_SET + 1])
             self.vp[SYS_PIC_SET] &= 0x00FF                 # device clears the 5A flag when done
+        if vp == SYS_LED_CFG and len(words) == 1 and not self._standby_on():
+            self.brightness = min(100, self.vp[SYS_LED_CFG] >> 8)          # plain brightness write
+        if vp <= SYS_CONFIG < end and self.vp[SYS_CONFIG] >> 8 == 0x5A:
+            self.vp[SYS_CONFIG] &= 0x00FF
         if vp <= SYS_RTC_SET + 3 and end > SYS_RTC_SET and self.vp[SYS_RTC_SET] == 0x5AA5:
             b = b"".join(self.vp[SYS_RTC_SET + k].to_bytes(2, "big") for k in (1, 2, 3))
             try:
@@ -386,6 +410,25 @@ class Device:
             except ValueError as e:
                 self.note(f"RTC set ignored: {e}")
             self.vp[SYS_RTC_SET] = 0
+
+    # ---------------------------------------------------------------- backlight / auto-dim
+
+    def _standby_on(self) -> bool:
+        return bool(self.vp[SYS_CONFIG + 1] & 0x04)
+
+    def standby_config(self) -> tuple[bool, int, int, int]:
+        """(enabled, on %, standby %, timeout ms)."""
+        w0, w1 = self.vp[SYS_LED_CFG], self.vp[SYS_LED_CFG + 1]
+        return self._standby_on(), min(100, w0 >> 8), min(100, w0 & 0xFF), w1 * 10
+
+    def dimmed(self) -> bool:
+        on, _, _, timeout = self.standby_config()
+        return on and timeout > 0 and self.pressed is None and self.ms - self.last_touch_ms >= timeout
+
+    def backlight(self) -> int:
+        """Current backlight % (what 0x0031 reports)."""
+        enabled, on, idle, _ = self.standby_config()
+        return idle if self.dimmed() else (on if enabled else self.brightness)
 
     def var(self, name: str, signed: bool = True) -> int:
         """Value of a project variable (needs build/manifest.json)."""
@@ -511,6 +554,14 @@ class Device:
         if self.pressed:
             self.release()
         x, y = int(x), int(y)
+        woke = self.dimmed()
+        self.last_touch_ms = self.ms
+        self._touch_status(1, x, y)
+        if woke:                                   # the waking touch only turns the backlight up (assumed)
+            self.events.append({"ms": self.ms, "event": "wake"})
+            self.pressed = {"ctl": None, "x0": x, "y0": y, "x": x, "y": y, "t0": self.ms, "fired": False,
+                            "repeats": 0, "page": self.page}
+            return "wake"
         t = self.hit(x, y)
         self.pressed = {"ctl": t, "x0": x, "y0": y, "x": x, "y": y, "t0": self.ms, "fired": False, "repeats": 0,
                         "page": self.page}
@@ -546,8 +597,14 @@ class Device:
         elif t is not None and t.key == "rotate_adjust":
             self._rotate(t, int(x), int(y))
 
+    def _touch_status(self, state: int, x: int, y: int) -> None:
+        self.vp[SYS_TP_STATUS:SYS_TP_STATUS + 4] = array("H", [0x5A00 | state, x & 0xFFFF, y & 0xFFFF, 0])
+
     def release(self) -> None:
         p, self.pressed = self.pressed, None
+        if p:
+            self.last_touch_ms = self.ms
+            self._touch_status(2, p["x"], p["y"])
         if not p or p["ctl"] is None:
             return
         t = p["ctl"]

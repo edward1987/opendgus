@@ -31,6 +31,16 @@ class _M(BaseModel):
 
 # ------------------------------------------------------------------ display & theme
 
+STANDBY_MAX_S = 655              # CFG 0x0E / VP 0x0082 hold the time in 10 ms units (16 bit)
+
+
+class Standby(_M):
+    """Auto-dim: the display itself lowers the backlight after `timeout_s` without a touch; a touch wakes it."""
+    enabled: bool = False
+    level: int = Field(10, ge=0, le=100, description="Backlight % while idle")
+    timeout_s: int = Field(60, ge=1, le=STANDBY_MAX_S, description="Seconds without a touch before dimming")
+
+
 class Display(_M):
     profile: Optional[str] = Field(None, description="DWIN part number or profile id, e.g. DMG10600C070_03WTC")
     width: int = Field(800, ge=16, le=4096)
@@ -41,6 +51,7 @@ class Display(_M):
     baud: int = 115200
     uart_crc: bool = False
     backlight: int = Field(100, ge=0, le=100)
+    standby: Standby = Field(default_factory=Standby)
     touch_beep: bool = True
     touch_auto_upload: bool = True
 
@@ -200,6 +211,22 @@ class Page(_M):
     controls: list[Control] = Field(default_factory=list)
 
 
+# ------------------------------------------------------------------ screensaver (run by the MCU)
+
+class Screensaver(_M):
+    """A page the controller shows after `timeout_s` without a touch; the next touch goes back. The stock DGUS
+    firmware cannot switch pages on its own, so the generated controller code (or your MCU) does the switching.
+    Build the page with tools set_screensaver / opendgus.screensaver.apply."""
+    enabled: bool = False
+    timeout_s: int = Field(120, ge=5, le=86400, description="Seconds without a touch before it appears")
+    page: Optional[int] = Field(None, description="Screensaver page id (first animation frame)")
+    frame_pages: list[int] = Field(default_factory=list, description="Further animation frame pages")
+    frame_ms: int = Field(100, ge=8, le=2040, description="Animation time per frame")
+    source: Optional[str] = Field(None, description="assets/... image or animated GIF it was made from")
+    wake_page: Optional[int] = Field(None, description="Page after a touch; null = the page that was showing")
+    brightness: Optional[int] = Field(None, ge=0, le=100, description="Backlight % while shown; null = unchanged")
+
+
 # ------------------------------------------------------------------ project
 
 class Project(_M):
@@ -210,6 +237,7 @@ class Project(_M):
     theme: Theme = Field(default_factory=Theme)
     variables: list[Variable] = Field(default_factory=list)
     pages: list[Page] = Field(default_factory=lambda: [Page(id=0, name="Home")])
+    screensaver: Screensaver = Field(default_factory=Screensaver)
 
     # -------- lookup helpers
     def page(self, page_id: int) -> Page:

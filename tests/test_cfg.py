@@ -34,3 +34,11 @@ def test_sys_cfg_matches_hardware_readback():
 def test_decode_reads_back():
     text = decode(build_cfg(CfgOptions(backlight=100, baud=9600)))
     assert "9600 bps" in text and "100%" in text
+
+
+def test_standby_bytes():
+    b = build_cfg(CfgOptions(backlight=100, backlight_standby=True, backlight_standby_level=10,
+                             backlight_standby_time_ms=60_000))
+    assert b[5] & 0x04
+    assert (b[12], b[13]) == (100, 10)
+    assert int.from_bytes(b[14:16], "big") == 6000      # 10 ms units

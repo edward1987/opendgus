@@ -69,7 +69,11 @@
     "language": "Language",
     "run": "Run",
     "runHint": "Try the design in the display emulator",
-    "exitRun": "Back to editing"
+    "exitRun": "Back to editing",
+    "settings": "Settings",
+    "settingsHint": "Backlight, auto-dim and screensaver",
+    "controller": "Controller",
+    "controllerHint": "Code for Arduino, Pico, ESP32 or a PC that drives this display"
   },
   "status": {
     "saved": "All changes saved",
@@ -202,7 +206,9 @@
     "profile": "Model",
     "backlight": "Backlight",
     "beep": "Touch beep",
-    "baud": "Serial baud"
+    "baud": "Serial baud",
+    "dimSummary": "{{level}}% after {{s}} s",
+    "off": "Off"
   },
   "align": {
     "left": "Align left",
@@ -459,7 +465,16 @@
     "noChange": "no change",
     "toPage": "page {{page}}",
     "changed": "The design changed: restart to apply",
-    "invalidValue": "Enter a whole number"
+    "invalidValue": "Enter a whole number",
+    "dimmed": "dimmed · {{level}}%",
+    "saver": "screensaver",
+    "woke": "Touch woke the display",
+    "saverOn": "Controller: screensaver (idle)",
+    "saverOff": "Controller: touch, back from the screensaver",
+    "simController": "Simulate controller",
+    "simControllerHint": "Do what the generated controller code does: show the screensaver when idle and go back on touch",
+    "idle": "Go idle",
+    "idleHint": "Pretend nobody touched the screen for a long time"
   },
   "mcp": {
     "title": "Connect an AI app (MCP)",
@@ -479,5 +494,30 @@
     "copy": "Copy",
     "copied": "Copied",
     "done": "Done"
+  },
+  "settings": {
+    "title": "Project settings",
+    "power": "Backlight & auto-dim",
+    "autoDim": "Auto-dim",
+    "dimTo": "Dim to",
+    "dimAfter": "After no touch for",
+    "dimHint": "The display dims itself (no controller needed) and the next touch only wakes it. It is stored in T5LCFG.CFG, which the display reads from an SD card. After a USB/UART upload it stays active until power-off; the generated controller code switches it on again at every start-up. Longest time: 655 s.",
+    "screensaver": "Screensaver",
+    "chooseImage": "Choose image or GIF…",
+    "changeImage": "Change image…",
+    "removeSaver": "Remove",
+    "noImage": "No image",
+    "imageHint": "A picture or an animated GIF (up to 30 frames), scaled to fill the screen. Every frame is a full-screen image in the display's flash.",
+    "frames": "{{count}} frames",
+    "saverOn": "Enabled",
+    "saverAfter": "Show after no touch for",
+    "frameTime": "Time per frame",
+    "applyFrame": "Apply",
+    "wake": "After a touch go to",
+    "wakePrevious": "The page that was showing",
+    "saverBrightness": "Backlight while shown",
+    "unchanged": "unchanged",
+    "saverNeedsController": "The display firmware cannot switch pages by itself, so your controller shows and hides the screensaver. The generated code (Arduino, Pico, ESP32, Raspberry Pi) already does it. Without a controller the screensaver page still works as a page: a touch leaves it.",
+    "openController": "Controller code…"
   }
 }

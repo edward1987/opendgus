@@ -8,6 +8,7 @@ import { LeftPanel } from "./LeftPanel";
 import { McpDialog } from "./McpDialog";
 import { RightPanel } from "./RightPanel";
 import { RunView } from "./RunView";
+import { SettingsDialog } from "./SettingsDialog";
 import { ThemeDialog } from "./ThemeDialog";
 import { Toolbar } from "./Toolbar";
 
@@ -88,6 +89,7 @@ export function Editor() {
       {dialog === "device" && <DeviceDialog onClose={() => setDialog(null)} />}
       {dialog === "theme" && <ThemeDialog onClose={() => setDialog(null)} />}
       {dialog === "mcp" && <McpDialog onClose={() => setDialog(null)} />}
+      {dialog === "settings" && <SettingsDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }

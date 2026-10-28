@@ -9,7 +9,7 @@ import i18n from "./i18n";
 
 export type RightTab = "props" | "insert" | "vars" | "ai";
 export type Mode = "edit" | "run";
-export type DialogName = null | "validate" | "build" | "device" | "theme" | "display" | "mcp";
+export type DialogName = null | "validate" | "build" | "device" | "theme" | "display" | "mcp" | "settings" | "controller";
 
 export interface Toast {
   id: number;
@@ -56,6 +56,8 @@ interface State {
   createProject(args: Record<string, unknown>, displayPatch?: Record<string, unknown>): Promise<void>;
   closeProject(): Promise<void>;
   commit(next: Project, coalesce?: string | null): void;
+  /** Run a backend tool that edits project.json and adopt the result (undoable, no "changed outside" toast). */
+  applyTool<T = unknown>(name: string, args?: Record<string, unknown>): Promise<T>;
   undo(): void;
   redo(): void;
   select(ids: string[], additive?: boolean): void;
@@ -186,6 +188,7 @@ export const useStore = create<State>((set, get) => {
           if (cfg.smokeAiDemo !== null && cfg.smokeAiDemo !== undefined) set({ rightTab: "ai" });
           if (cfg.smokeRun !== null && cfg.smokeRun !== undefined) set({ mode: "run" });
           if (cfg.smokeDialog === "mcp") set({ dialog: "mcp", rightTab: "ai" });
+          else if (cfg.smokeDialog) set({ dialog: cfg.smokeDialog as DialogName });
         }
       } catch (e) {
         set({ backendError: errText(e) });
@@ -236,6 +239,20 @@ export const useStore = create<State>((set, get) => {
       }));
       clearTimeout(saveTimer);
       saveTimer = setTimeout(() => void get().flushSave(), 150);
+    },
+
+    async applyTool<T>(name: string, args: Record<string, unknown> = {}) {
+      const { api } = get();
+      if (!api) throw new Error("backend not available");
+      await get().flushSave();
+      const before = get().project;
+      const out = await api.tool<T>(name, args);
+      const r = await api.getProject();
+      if (before) set((s) => ({ history: record(s.history, before) }));
+      set((s) => ({ selection: keepSelection(r.project, s.selection) }));
+      adopt(r.folder, r.project);
+      get().refreshPreview(true);
+      return out;
     },
 
     undo() {
