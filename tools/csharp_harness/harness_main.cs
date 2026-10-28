@@ -43,5 +43,12 @@ public static class Program {
     File.WriteAllBytes(Path.Combine(args[0],"cs_14.bin"), Build14(pages));
     File.WriteAllText(Path.Combine(args[0],"cs_vectors.txt"), o.ToString());
     Console.Write(o.ToString());
+    // Families (tools/csharp_harness/families/*.cs): public static class Family_<name> { public static string Run() }
+    foreach (var ty in System.Reflection.Assembly.GetExecutingAssembly().GetTypes()) {
+      if (!ty.Name.StartsWith("Family_")) continue;
+      var txt = (string)ty.GetMethod("Run").Invoke(null, null);
+      File.WriteAllText(Path.Combine(args[0], ty.Name.Substring(7) + ".txt"), txt);
+      Console.WriteLine(ty.Name + ": " + txt.Split((char)10).Length + " lines");
+    }
   }
 }

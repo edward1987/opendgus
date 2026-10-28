@@ -10,3 +10,13 @@ bash tools/csharp_harness/build.sh     # Windows + .NET Framework csc; needs ven
 ```
 
 Only the vectors (bytes) are committed. The generated C# file in `out/` contains DWIN code and is git-ignored.
+
+## Adding control families
+
+To add a control family, create two files:
+- `families/<name>.sh` prints more harness classes. It can use the `ext FILE "signature"` helper and `$D` (the
+  decompile root) from `gen_harness.sh`.
+- `families/<name>.cs` contains `public static class Family_<name> { public static string Run() { ... } }`. It returns
+  lines of the form `vector_name HEX`.
+
+`build.sh` compiles every family. Each family's vectors go to `tests/vectors/<name>.txt`.

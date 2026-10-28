@@ -82,4 +82,5 @@ EOF
 ext $D/BizDraw.ConfigShow/TextShow.cs "public override ushort Id"
 ext $D/BizDraw.ConfigShow/TextShow.cs "public override void GetData()"
 echo "}"
-} 
+for fam in "$(dirname "$0")"/families/*.sh; do if [ -e "$fam" ]; then . "$fam"; fi; done
+}

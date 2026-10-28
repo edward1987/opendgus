@@ -9,5 +9,6 @@ out="$here/out"; mkdir -p "$out"
 csc="${CSC:-/c/Windows/Microsoft.NET/Framework64/v4.0.30319/csc.exe}"
 bash "$here/gen_harness.sh" > "$out/harness_classes.cs"
 w() { cygpath -w "$1" 2>/dev/null || echo "$1"; }
-"$csc" -nologo -out:"$(w "$out/harness.exe")" "$(w "$out/harness_classes.cs")" "$(w "$here/harness_main.cs")"
+fams=(); for f in "$here"/families/*.cs; do if [ -e "$f" ]; then fams+=("$(w "$f")"); fi; done
+"$csc" -nologo -out:"$(w "$out/harness.exe")" "$(w "$out/harness_classes.cs")" "$(w "$here/harness_main.cs")" "${fams[@]}"
 "$out/harness.exe" "$(w "$here/../../tests/vectors")"
