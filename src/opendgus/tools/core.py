@@ -433,6 +433,73 @@ def build() -> dict:
             "variables": {k: f"0x{v:04X}" for k, v in r.vps.items()}}
 
 
+# ======================================================================= emulator (simulate the built project)
+
+_EMU: dict = {}
+
+
+def _emu():
+    if "dev" not in _EMU or _EMU.get("folder") != SESSION.folder:
+        raise ToolError("emulator not running: call emulator_start first")
+    return _EMU["dev"]
+
+
+def _emu_shot(dev, scale: float, caption: str) -> ToolImage:
+    return ToolImage(_png(dev.render(), scale), caption)
+
+
+def emulator_start(page: int = 0, scale: float = 0.5) -> ToolImage:
+    """Build the project and start the display emulator in its power-on state (variables from their initial
+    values). Returns a screenshot. Then use emulator_tap / emulator_set_variable to test behaviour."""
+    from ..emulator import Device
+    p = SESSION.load()
+    r = compile_project(p, SESSION.require())
+    if not r.ok:
+        raise ToolError(f"build failed: {[str(i) for i in r.issues]}")
+    dev = Device.from_folder(r.out_dir)
+    if page:
+        dev.set_page(page)
+    _EMU.update(dev=dev, folder=SESSION.folder)
+    return _emu_shot(dev, scale, json.dumps(dev.state(), default=str)[:1500])
+
+
+def _emu_vars(dev) -> dict:
+    out = {}
+    for v in SESSION.load().variables:
+        if v.type != "text":
+            try:
+                out[v.name] = dev.var(v.name)
+            except Exception:
+                pass
+    return out
+
+
+def emulator_tap(x: int, y: int, hold_ms: int = 0, scale: float = 0.5) -> ToolImage:
+    """Touch the emulated screen at (x, y) in display pixels (hold_ms > 0 keeps it pressed, e.g. to test
+    repeating +/- buttons). Returns a screenshot; the caption lists changed variables and the current page."""
+    dev = _emu()
+    before = _emu_vars(dev)
+    hit = dev.hold(x, y, hold_ms) if hold_ms else dev.tap(x, y)
+    after = _emu_vars(dev)
+    changed = {k: [before.get(k), v] for k, v in after.items() if before.get(k) != v}
+    return _emu_shot(dev, scale, json.dumps({"hit": hit, "page": dev.state().get("page"), "changed": changed},
+                                            default=str))
+
+
+def emulator_set_variable(name: str, value: int, scale: float = 0.5) -> ToolImage:
+    """Set a variable in the emulator as the MCU would (e.g. a sensor value) and return a screenshot."""
+    dev = _emu()
+    dev.set_var(name, value)
+    dev.tick(40)
+    return _emu_shot(dev, scale, json.dumps({"page": dev.state().get("page"), name: dev.var(name)}))
+
+
+def emulator_state() -> dict:
+    """Current emulator state: page, all variables, and the UART frames the display has sent."""
+    dev = _emu()
+    return {**dev.state(), "variables": _emu_vars(dev)}
+
+
 # ======================================================================= templates
 
 def list_templates() -> list[dict]:
@@ -531,9 +598,10 @@ TOOLS = [list_display_profiles, decode_display_part_number, list_widgets, get_wi
          search_icons, list_templates, create_project, open_project, get_project, set_display, set_theme,
          add_variable, update_variable, delete_variable, add_page, update_page, delete_page, duplicate_page,
          add_element, add_control, update_item, delete_item, arrange, apply_template, render_page, validate, build,
+         emulator_start, emulator_tap, emulator_set_variable, emulator_state,
          list_serial_ports, device_info, device_upload, device_read_variable, device_write_variable]
 
 READ_ONLY = {"list_display_profiles", "decode_display_part_number", "list_widgets", "get_widget_schema",
              "list_dgus_controls", "search_icons", "list_templates", "get_project", "render_page", "validate",
-             "list_serial_ports", "device_info", "device_read_variable"}
+             "list_serial_ports", "device_info", "device_read_variable", "emulator_state"}
 DESTRUCTIVE = {"delete_page", "delete_item", "delete_variable", "apply_template", "device_upload"}
