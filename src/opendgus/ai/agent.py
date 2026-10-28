@@ -32,7 +32,8 @@ Emit = Callable[[dict], None]
 # The in-app agent edits the open project; it doesn't switch projects or write to hardware (the user does that
 # with the editor's Upload button).
 EXCLUDED = {"create_project", "open_project", "device_upload", "device_write_variable", "list_serial_ports",
-            "device_info", "device_read_variable", "device_set_standby"}
+            "device_info", "device_read_variable", "device_set_standby",
+            "flash_controller", "create_controller_sample"}
 MAX_TOOL_ROUNDS = 40
 
 

@@ -160,7 +160,7 @@ def get_project(page: Optional[int] = None) -> dict:
     p = SESSION.load()
     d = p.model_dump(mode="json", exclude_defaults=True)
     full = p.model_dump(mode="json")
-    for key in ("name", "display", "theme", "variables", "pages", "screensaver"):   # always present
+    for key in ("name", "display", "theme", "variables", "pages", "screensaver", "controller"):  # always
         d.setdefault(key, full[key])
     if page is not None:
         d["pages"] = [pg for pg in d["pages"] if pg["id"] == page]
@@ -577,6 +577,147 @@ def emulator_state() -> dict:
     return {**dev.state(), "variables": _emu_vars(dev)}
 
 
+# ======================================================================= controller code (MCU side)
+
+def list_controller_boards() -> list[dict]:
+    """Boards the controller code can be generated for (Arduino Nano/Uno/Mega, Pico/Pico 2/Pico 2 W, ESP32 in
+    Arduino C++; Pico/Pico 2 W/ESP32 in MicroPython; Raspberry Pi / PC in Python), with wiring."""
+    from ..codegen.boards import BOARDS
+    return [{"id": b.id, "title": b.title, "language": b.lang, "network": b.wifi, "max_baud": b.max_baud,
+             "wiring": [f"display {d} -> {p}" for d, p in b.wiring]} for b in BOARDS.values()]
+
+
+def list_controller_samples() -> list[dict]:
+    """Ready-made examples (design + controller code) that create_controller_sample can build for any board."""
+    from ..codegen.samples import SAMPLES
+    return [s.to_dict() for s in SAMPLES.values()]
+
+
+def _controller(p: Project, board: str) -> str:
+    from ..codegen.boards import find, get
+    bid = board or p.controller.board
+    if not bid:
+        raise ToolError("which board? pass board= (see list_controller_boards)")
+    try:
+        return get(bid).id
+    except KeyError:
+        b = find(bid)
+        if b is None:
+            raise ToolError(f"unknown board {bid!r}; see list_controller_boards")
+        return b.id
+
+
+def generate_controller_project(board: str = "", mqtt: Optional[bool] = None,
+                                code: Optional[dict[str, str]] = None) -> dict:
+    """Write/refresh the controller code in <project>/controller/<board>/ from the current design: library, VP
+    address map, main sketch/main.py with one handler per touch variable, auto-dim + screensaver, README with
+    wiring. code = {region: source} fills USER CODE regions: 'globals', 'setup', 'loop', 'onValue' (C++) /
+    'on_value' (Python), or a variable constant such as 'VP_LIGHT' (runs when the display sends it; the new value
+    is `value`). Regions not given keep their code. mqtt=True: MQTT + Home Assistant (network boards)."""
+    from ..codegen import generate as G
+    with SESSION.lock:
+        p = SESSION.load()
+        bid = _controller(p, board)
+        use_mqtt = p.controller.mqtt if mqtt is None else mqtt
+        try:
+            out = G.write(SESSION.require(), p, bid, mqtt=use_mqtt, logic=code)
+        except ValueError as e:
+            raise ToolError(str(e))
+        if (p.controller.board, p.controller.mqtt) != (bid, use_mqtt):
+            p.controller.board, p.controller.mqtt = bid, use_mqtt
+            SESSION.save(p)
+        b = G.get_board(bid)
+        warn = [f"display baud {p.display.baud} is above {b.max_baud} for this board; set_display(baud="
+                f"{b.max_baud})"] if p.display.baud > b.max_baud else []
+        return {**out, "warnings": warn}
+
+
+def _controller_root(board: str = "") -> tuple[Path, str]:
+    p = SESSION.load()
+    bid = _controller(p, board)
+    return SESSION.require() / "controller" / bid, bid
+
+
+def read_controller_file(path: str = "", board: str = "") -> dict:
+    """A file of the generated controller project (default: the main sketch / main.py) and its USER CODE
+    regions."""
+    from ..codegen import generate as G
+    root, bid = _controller_root(board)
+    rel = path or G.main_file(SESSION.load(), bid)
+    f = (root / rel).resolve()
+    if root.resolve() not in f.parents or not f.is_file():
+        raise ToolError(f"no file {rel!r} in {root} (call generate_controller_project first)")
+    text = f.read_text(encoding="utf-8")
+    return {"path": rel, "content": text, "regions": sorted(G.regions(text)),
+            "files": sorted(x.relative_to(root).as_posix() for x in root.rglob("*") if x.is_file())}
+
+
+def write_controller_file(path: str, content: str, board: str = "") -> dict:
+    """Create or replace a file inside the controller project (e.g. an extra .h or .py module). For the main file
+    prefer generate_controller_project(code=...), which keeps the generated parts in sync with the design."""
+    root, _ = _controller_root(board)
+    f = (root / path).resolve()
+    if root.resolve() not in f.parents:
+        raise ToolError("path must stay inside the controller folder")
+    f.parent.mkdir(parents=True, exist_ok=True)
+    f.write_text(content, encoding="utf-8", newline="\n")
+    return {"written": f.relative_to(root.resolve()).as_posix(), "bytes": len(content.encode())}
+
+
+def compile_controller(board: str = "") -> dict:
+    """Build the controller project (Arduino: arduino-cli, which installs the board package the first time;
+    MicroPython/Python: syntax check). Returns ok, errors (fix them and compile again) and memory use."""
+    from ..codegen import toolchain as TC
+    p = SESSION.load()
+    bid = _controller(p, board)
+    try:
+        return TC.compile_project(SESSION.require(), bid, mqtt=p.controller.mqtt)
+    except (RuntimeError, FileNotFoundError) as e:
+        raise ToolError(str(e))
+
+
+def controller_toolchain() -> dict:
+    """Which build tools are installed (arduino-cli) and how to get them."""
+    from ..codegen import toolchain as TC
+    return TC.status()
+
+
+def flash_controller(port: str, board: str = "", confirm: bool = False) -> dict:
+    """Compile and upload the controller project to the board on `port` (Arduino: arduino-cli upload;
+    MicroPython: copies the .py files and resets). Only with confirm=True after the user agreed."""
+    from ..codegen import toolchain as TC
+    if not confirm:
+        raise ToolError("flash_controller overwrites the board's program; ask the user, then confirm=True")
+    p = SESSION.load()
+    try:
+        return TC.flash(SESSION.require(), _controller(p, board), port)
+    except Exception as e:
+        raise ToolError(str(e))
+
+
+def create_controller_sample(sample: str, board: str, folder: str, profile: str = "", width: int = 0,
+                             height: int = 0) -> dict:
+    """Create a new project folder from a sample (see list_controller_samples) with its controller code for
+    `board`, and make it current."""
+    from ..codegen import samples as SM
+    from ..codegen.boards import BOARDS, find
+    bid = board if board in BOARDS else (find(board).id if find(board) else board)
+    f = Path(folder).expanduser()
+    try:
+        w, h = width or 1024, height or 600
+        if profile:
+            d = Display.from_profile(profile)
+            w, h = d.width, d.height
+        out = SM.create_sample(sample, bid, f, w, h, profile or None)
+    except (KeyError, ValueError, FileExistsError) as e:
+        raise ToolError(str(e))
+    SESSION.folder = f
+    p = SESSION.load()
+    p.controller.board, p.controller.mqtt = bid, SM.SAMPLES[sample].wifi
+    SESSION.save(p)
+    return {**out, **_summary(p)}
+
+
 # ======================================================================= templates
 
 def list_templates() -> list[dict]:
@@ -728,9 +869,13 @@ TOOLS = [list_display_profiles, decode_display_part_number, list_widgets, get_wi
          add_element, add_control, update_item, delete_item, arrange, apply_template, render_page, validate, build,
          emulator_start, emulator_tap, emulator_set_variable, emulator_wait, emulator_set_page, emulator_state,
          list_serial_ports, device_info, device_upload, device_read_variable, device_write_variable,
-         device_set_standby]
+         device_set_standby, list_controller_boards, list_controller_samples, generate_controller_project,
+         read_controller_file, write_controller_file, compile_controller, controller_toolchain, flash_controller,
+         create_controller_sample]
 
 READ_ONLY = {"list_display_profiles", "decode_display_part_number", "list_widgets", "get_widget_schema",
              "list_dgus_controls", "search_icons", "list_templates", "get_project", "render_page", "validate",
-             "list_serial_ports", "device_info", "device_read_variable", "emulator_state"}
-DESTRUCTIVE = {"delete_page", "delete_item", "delete_variable", "apply_template", "device_upload"}
+             "list_serial_ports", "device_info", "device_read_variable", "emulator_state",
+             "list_controller_boards", "list_controller_samples", "read_controller_file", "controller_toolchain"}
+DESTRUCTIVE = {"delete_page", "delete_item", "delete_variable", "apply_template", "device_upload",
+               "flash_controller"}

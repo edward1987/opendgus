@@ -29,7 +29,7 @@ dependencies = [
 ]
 
 [project.optional-dependencies]
-dev = ["pytest>=8", "httpx>=0.27"]
+dev = ["pytest>=8", "httpx>=0.27", "ziglang>=0.13"]   # ziglang: C++ compiler for the Arduino library test
 build = ["pyinstaller>=6.10"]
 
 [project.scripts]

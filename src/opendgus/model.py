@@ -227,6 +227,12 @@ class Screensaver(_M):
     brightness: Optional[int] = Field(None, ge=0, le=100, description="Backlight % while shown; null = unchanged")
 
 
+class Controller(_M):
+    """The controller code generated for this project (controller/<board>/ in the project folder)."""
+    board: Optional[str] = Field(None, description="Board id, e.g. nano, pico2, esp32, mp_pico2w, rpi")
+    mqtt: bool = Field(False, description="Wi-Fi/network boards: MQTT + Home Assistant discovery")
+
+
 # ------------------------------------------------------------------ project
 
 class Project(_M):
@@ -238,6 +244,7 @@ class Project(_M):
     variables: list[Variable] = Field(default_factory=list)
     pages: list[Page] = Field(default_factory=lambda: [Page(id=0, name="Home")])
     screensaver: Screensaver = Field(default_factory=Screensaver)
+    controller: Controller = Field(default_factory=Controller)
 
     # -------- lookup helpers
     def page(self, page_id: int) -> Page:
