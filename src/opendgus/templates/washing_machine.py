@@ -145,7 +145,7 @@ def status_page(f: Frame):
         "style": "ring", "min": 0, "max": 100, "color": "primary", "track": "surface2", "thickness": t}))
     nh = rs * 22 // 100
     dw = digit_w(nh, "semibold")
-    cw = max(6, nh // 3)
+    cw = max(8, nh * 2 // 5)                  # room for the colon glyph with any platform font metrics
     tw = dw + cw + 2 * dw + 4
     tx = rx + (rs - tw) // 2
     ty = ry + rs // 2 - nh * 75 // 100
