@@ -68,7 +68,9 @@ class Button(Widget):
         fg = p.text_color or ("on_primary" if p.style == "filled" else col)
         box = (c.x, c.y, c.x + c.w, c.y + c.h)
         if p.style == "filled":
-            r.rect(img, box, col, radius=radius, opacity=0.75 if pressed else 1.0)
+            r.rect(img, box, col, radius=radius)
+            if pressed:
+                r.rect(img, box, "#000000", radius=radius, opacity=0.28)
         elif p.style == "outline":
             r.rect(img, box, col if pressed else None, stroke=col, stroke_width=2, radius=radius,
                    opacity=0.25 if pressed else 1.0)
@@ -174,7 +176,8 @@ class Toggle(Widget):
 
     def expand(self, ctx, c):
         vp = ctx.require_var(c)
-        off, on = ctx.icon(self.art(ctx, c, False)), ctx.icon(self.art(ctx, c, True))
+        off = ctx.icon(self.art(ctx, c, False), dedupe=False)
+        on = ctx.icon(self.art(ctx, c, True), dedupe=False)
         if on != off + 1:
             raise RuntimeError("toggle icons must be consecutive")
         return [Record("inc_adjust", dict(page=ctx.page.id, **touch_area(c), vp=vp, increase=True, wrap=True,
@@ -309,7 +312,7 @@ class Progress(Widget):
         if not 1 <= p.max - p.min <= 200:
             raise ValueError(f"{c.id}: progress range {p.min}..{p.max} must span 1..200 values")
         vp = ctx.require_var(c)
-        ids = [ctx.icon(self.frame(ctx, c, v)) for v in range(p.min, p.max + 1)]
+        ids = [ctx.icon(self.frame(ctx, c, v), dedupe=False) for v in range(p.min, p.max + 1)]
         if ids != list(range(ids[0], ids[0] + len(ids))):
             raise RuntimeError("progress frames must be consecutive icons")
         return [Record("var_icon", dict(vp=vp, x=c.x, y=c.y, v_min=p.min, v_max=p.max, icon_min=ids[0],
@@ -365,7 +368,7 @@ class Indicator(Widget):
     def expand(self, ctx, c):
         p = self.props(c)
         vp = ctx.require_var(c)
-        ids = [ctx.icon(self.art(ctx, c, s)) for s in p.states]
+        ids = [ctx.icon(self.art(ctx, c, s), dedupe=False) for s in p.states]
         return [Record("var_icon", dict(vp=vp, x=c.x, y=c.y, v_min=0, v_max=len(ids) - 1, icon_min=ids[0],
                                         icon_max=ids[-1], icon_lib=ctx.icon_lib, mode=1))]
 
@@ -427,8 +430,10 @@ class Slider(Widget):
         else:
             track = dict(adj_x1=c.x, adj_y1=c.y, adj_x2=c.x + c.w, adj_y2=c.y + c.h)
             moving = dict(x_begin=c.x, x_end=c.x + c.w - k, y=c.y + (c.h - k) // 2, vertical=0)
+        # drag_adjust maps the top/left end of the track to v_begin: vertical sliders put the minimum at the bottom
+        vb, ve = (p.max, p.min) if p.vertical else (p.min, p.max)
         return [Record("drag_adjust", dict(page=ctx.page.id, **touch_area(c), vp=vp,
                                            direction=1 if p.vertical else 0, **track,
-                                           v_begin=p.min, v_end=p.max)),
+                                           v_begin=vb, v_end=ve)),
                 Record("slider_display", dict(vp=vp, v_begin=p.min, v_end=p.max, icon=knob, icon_lib=ctx.icon_lib,
                                               mode=1, **moving))]

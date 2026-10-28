@@ -82,3 +82,32 @@ def test_raw_control_passthrough(tmp_path):
     rec = C.parse_14((tmp_path / "build" / "DWIN_SET" / "14.bin").read_bytes())[0][0]
     key, v = S.decode(rec)
     assert key == "qr_code" and v["vp"] == r.vps["q"] and v["x"] == 100
+
+
+def test_narrow_progress_with_identical_frames_compiles(tmp_path):
+    p = Project(display=Display.custom(800, 480), variables=[Variable(name="v")])
+    p.pages[0].controls.append(Control(type="progress", var="v", x=10, y=10, w=100, h=8,
+                                       props={"min": 0, "max": 10}))
+    assert compile_project(p, tmp_path, write=False).ok
+
+
+def test_button_pressed_page_is_visibly_different(tmp_path):
+    from PIL import ImageChops, ImageStat
+    p = Project(display=Display.custom(800, 480))
+    p.pages[0].controls.append(Control(type="button", x=100, y=100, w=200, h=80, props={"label": "Go"}))
+    r = compile_project(p, tmp_path, write=False)
+    box = (100, 100, 300, 180)
+    diff = ImageChops.difference(r.pages[0].crop(box), r.pages[r.press_pages[0]].crop(box))
+    assert max(ImageStat.Stat(diff).mean) > 15
+
+
+def test_vertical_slider_minimum_at_bottom(tmp_path):
+    p = Project(display=Display.custom(800, 480), variables=[Variable(name="v")])
+    p.pages[0].controls.append(Control(type="slider", var="v", x=100, y=50, w=60, h=300,
+                                       props={"min": 0, "max": 100, "vertical": True}))
+    r = compile_project(p, tmp_path)
+    out = tmp_path / "build" / "DWIN_SET"
+    drag = next(S.decode(x)[1] for x in C.parse_13((out / "13.bin").read_bytes()))
+    knob = next(S.decode(x)[1] for recs in C.parse_14((out / "14.bin").read_bytes()).values() for x in recs)
+    assert drag["v_begin"] == 100 and drag["v_end"] == 0           # top of the track = max
+    assert knob["v_begin"] == 0 and knob["x_begin"] > knob["x_end"]  # min value -> knob at the bottom

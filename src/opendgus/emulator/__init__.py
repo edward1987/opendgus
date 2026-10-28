@@ -1,2 +1,2 @@
-"""Desktop emulator: renders a DWIN_SET folder and simulates touch."""
-from .dwinemu import Project, Renderer  # noqa: F401
+"""Emulator: a headless DGUS II device (engine.Device) and a Tk front end (dwinemu)."""
+from .engine import Ctl, Device, format_number  # noqa: F401

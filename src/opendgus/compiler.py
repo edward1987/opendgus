@@ -100,8 +100,12 @@ class Context:
         return self.result.press_pages[page_id]
 
     # -- images
-    def icon(self, img: Image.Image) -> int:
+    def icon(self, img: Image.Image, dedupe: bool = True) -> int:
+        """Add an icon to the library. Use dedupe=False for sequences that must stay consecutive (frames)."""
         img = img.convert("RGB")
+        if not dedupe:
+            self.icons.append(img)
+            return len(self.icons) - 1
         h = hashlib.sha1(img.tobytes() + repr(img.size).encode()).hexdigest()
         if h not in self._icon_ids:
             self._icon_ids[h] = len(self.icons)
