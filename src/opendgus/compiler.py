@@ -225,6 +225,84 @@ def _vars_header(project: Project, vps: dict[str, int]) -> str:
     return "\n".join(lines + [""] + pages) + "\n"
 
 
+# ------------------------------------------------------------------ fast single-page preview (editor)
+
+def render_preview(project: Project, folder: Optional[Path], page_id: int,
+                   pressed: tuple[str, ...] = ()) -> tuple[Image.Image, list[Issue]]:
+    """Render one page as the device will show it in its initial state, without building icon libraries.
+    `pressed` lists control ids drawn in their pressed look. Much faster than compile_project."""
+    project.ensure_ids()
+    res = BuildResult(Path("."))
+    res.vps.update(project.allocate_vps())
+    ctx = Context(project, Path(folder) if folder else None, res)
+    page = project.page(page_id)
+    ctx.page = page
+    ctx.base = ctx.r.render(page)
+    ctx.drawn = ctx.base.convert("RGBA")
+    for c in page.controls:
+        if not c.visible or c.type.startswith("raw:"):
+            continue
+        try:
+            w = get_widget(c.type)
+            w.draw(ctx, c, ctx.drawn, pressed=False)
+            if c.id in pressed and w.has_press_effect:
+                w.draw(ctx, c, ctx.drawn, pressed=True)
+        except Exception as e:
+            res.issues.append(Issue("error", c.id, f"{c.type}: {e}"))
+    # show the initial value of dynamic widgets the way the device will (toggle on, number digits...)
+    for c in page.controls:
+        if not c.visible or c.type.startswith("raw:") or not c.var:
+            continue
+        try:
+            _draw_initial_state(ctx, c, ctx.drawn)
+        except Exception as e:
+            res.issues.append(Issue("warning", c.id, f"preview: {e}"))
+    return ctx.drawn.convert("RGB"), res.issues
+
+
+def _draw_initial_state(ctx: Context, c: Control, img: Image.Image) -> None:
+    from .widgets import basic as B
+    w = get_widget(c.type)
+    var = ctx.var_of(c)
+    v = int(var.init) if var.type != "text" else 0
+    if isinstance(w, B.Toggle):
+        img.paste(w.art(ctx, c, bool(v)), (c.x, c.y))
+    elif isinstance(w, B.Progress):
+        p = w.props(c)
+        img.paste(w.frame(ctx, c, min(max(v, p.min), p.max)), (c.x, c.y))
+    elif isinstance(w, B.Indicator):
+        st = w.props(c).states
+        if 0 <= v < len(st):
+            img.paste(w.art(ctx, c, st[v]), (c.x, c.y))
+    elif isinstance(w, B.Number):
+        p = w.props(c)
+        dec = var.decimals if p.decimals is None else p.decimals
+        uw, _ = w._unit_w(ctx, c, p)
+        bg = ctx.bg_color_at(c.x + (c.w - uw) // 2, c.y + c.h // 2)
+        icon0, widths = ctx.digit_set(p.font, p.weight, c.h, p.color, bg)
+        s = str(abs(v)).rjust(dec + 1, "0")
+        txt = ("-" if v < 0 else "") + (s[:-dec] + "." + s[-dec:] if dec else s)
+        if p.leading_zeros:
+            ip = txt.split(".")[0].lstrip("-").rjust(p.int_digits, "0")
+            txt = ("-" if v < 0 else "") + ip + ("." + txt.split(".")[1] if dec else "")
+        glyphs = [ctx.icons[icon0 + DIGITS.index(ch)] for ch in txt]
+        x = c.x + c.w - uw - sum(g.width for g in glyphs) if p.align == "right" else c.x
+        for g in glyphs:
+            img.paste(g, (x, c.y))
+            x += g.width
+    elif isinstance(w, B.Slider):
+        p = w.props(c)
+        k, _ = w.geometry(c, p)
+        ctx_drawn = ctx.drawn
+        knob = w.knob_art(ctx, c, p, k)
+        f = 0 if p.max == p.min else (min(max(v, p.min), p.max) - p.min) / (p.max - p.min)
+        if p.vertical:
+            img.paste(knob, (c.x + (c.w - k) // 2, round(c.y + c.h - k - f * (c.h - k))))
+        else:
+            img.paste(knob, (round(c.x + f * (c.w - k)), c.y + (c.h - k) // 2))
+        ctx.drawn = ctx_drawn
+
+
 # ------------------------------------------------------------------ main entry
 
 def compile_project(project: Project, folder: Optional[Path] = None, out_dir: Optional[Path] = None,
