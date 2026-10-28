@@ -1,0 +1,84 @@
+import pytest
+
+from opendgus.compiler import compile_project
+from opendgus.formats import controls as C
+from opendgus.formats import icl as ICL
+from opendgus.formats import spec as S
+from opendgus.model import Control, Display, Page, Project, Variable
+from opendgus.templates import home_control
+
+
+@pytest.mark.parametrize("size", ["1024x600", "800x480", "480x272", "480x800"])
+def test_home_template_compiles_cleanly(tmp_path, size):
+    W, H = map(int, size.split("x"))
+    p = home_control.build(W, H)
+    r = compile_project(p, tmp_path)
+    assert r.ok, [str(i) for i in r.issues]
+    assert not [i for i in r.issues if i.level == "warning"], [str(i) for i in r.issues]
+    out = tmp_path / "build" / "DWIN_SET"
+    names = sorted(f.name for f in out.iterdir())
+    assert names[:4] == ["13.bin", "14.bin", "22.bin", "32_pages.icl"]
+    assert (tmp_path / "build" / "vars.h").read_text().count("#define VP_") == len(p.variables)
+
+    pages = ICL.read_icl((out / "32_pages.icl").read_bytes())
+    assert set(pages.entries) >= {0, 1} and pages.crc_ok
+    assert all((e.width, e.height) == (W, H) for e in pages.entries.values())
+
+    shows = C.parse_14((out / "14.bin").read_bytes())
+    kinds = [S.decode(rec)[0] for recs in shows.values() for rec in recs]
+    assert kinds.count("var_icon") == 7 and kinds.count("art_var") == 3
+    touches = [S.decode(rec)[0] for rec in C.parse_13((out / "13.bin").read_bytes())]
+    assert touches.count("inc_adjust") == 9 and "basic_touch" in touches
+
+    init = (out / "22.bin").read_bytes()
+    vp = r.vps["setpoint"]
+    assert int.from_bytes(init[vp * 2:vp * 2 + 2], "big") == 215
+
+
+def test_press_pages_and_icon_library(tmp_path):
+    r = compile_project(home_control.build(1024, 600), tmp_path)
+    assert r.press_pages == {0: 2, 1: 3}          # each page with buttons gets a press-effect page
+    out = tmp_path / "build" / "DWIN_SET"
+    icon_file = next(f for f in out.iterdir() if f.name.endswith("_icons.icl"))
+    slot = int(icon_file.name.split("_")[0])
+    icons = ICL.read_icl(icon_file.read_bytes())
+    for recs in C.parse_14((out / "14.bin").read_bytes()).values():
+        for rec in recs:
+            key, v = S.decode(rec)
+            assert v["icon_lib"] == slot
+            first = v.get("icon_min", v.get("icon0"))
+            assert first in icons.entries
+
+
+def test_8mb_flash_uses_slot_23(tmp_path):
+    p = home_control.build(480, 272)
+    p.display.flash_mb = 8
+    r = compile_project(p, tmp_path)
+    assert r.ok
+    assert "23_pages.icl" in r.files
+    icon_slot = next(f["slot"] for n, f in r.files.items() if n.endswith("_icons.icl"))
+    assert icon_slot < 32 and icon_slot not in (0, 12, 13, 14, 22, 23)
+
+
+def test_validation_errors(tmp_path):
+    p = Project(display=Display.custom(320, 240), variables=[Variable(name="v")])
+    p.pages = [Page(id=0, controls=[
+        Control(type="toggle", var="v", x=300, y=10, w=100, h=50),        # off screen
+        Control(type="number", x=0, y=0, w=50, h=30),                   # missing variable
+        Control(type="nonexistent", x=0, y=100, w=10, h=10),            # unknown widget
+    ])]
+    r = compile_project(p, tmp_path, write=False)
+    msgs = " | ".join(str(i) for i in r.issues)
+    assert not r.ok
+    assert "outside" in msgs and "needs a variable" in msgs and "unknown widget" in msgs
+
+
+def test_raw_control_passthrough(tmp_path):
+    p = Project(display=Display.custom(800, 480), variables=[Variable(name="q", type="text", length=32)])
+    p.pages[0].controls.append(Control(type="raw:qr_code", var="q", x=100, y=100, w=200, h=200,
+                                       props={"unit_pixels": 4}))
+    r = compile_project(p, tmp_path)
+    assert r.ok, [str(i) for i in r.issues]
+    rec = C.parse_14((tmp_path / "build" / "DWIN_SET" / "14.bin").read_bytes())[0][0]
+    key, v = S.decode(rec)
+    assert key == "qr_code" and v["vp"] == r.vps["q"] and v["x"] == 100
