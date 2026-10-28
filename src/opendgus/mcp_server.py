@@ -59,7 +59,7 @@ def _adapt(fn):
 
 def build_server() -> MCPServer:
     mcp = MCPServer(name="OpenDGUS", title="OpenDGUS display designer", instructions=INSTRUCTIONS,
-                    website_url="https://github.com/opendgus/opendgus")
+                    website_url="https://github.com/edward1987/opendgus")
     for fn in T.TOOLS:
         name = fn.__name__
         ann = ToolAnnotations(readOnlyHint=name in T.READ_ONLY, destructiveHint=name in T.DESTRUCTIVE,

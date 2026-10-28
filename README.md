@@ -27,7 +27,7 @@ Everything was reverse-engineered from the official tools and verified on a real
 ## Quick start
 
 ```bash
-git clone <repo> opendgus && cd opendgus
+git clone https://github.com/edward1987/opendgus && cd opendgus
 python -m venv .venv && .venv/Scripts/activate        # Linux/macOS: source .venv/bin/activate
 pip install -e ".[dev]"
 

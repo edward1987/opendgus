@@ -25,7 +25,7 @@ def build(W: int = 1024, H: int = 600) -> Project:
         Variable(name="state", init=1, doc="0/1/2 indicator + radio buttons"),
         Variable(name="angle", init=30, doc="0-100 needle"),
         Variable(name="bits", type="bits", init=0b0101, doc="bit 0..3"),
-        Variable(name="qr", type="text", length=40, init="https://github.com/opendgus", doc="QR content"),
+        Variable(name="qr", type="text", length=40, init="https://github.com/edward1987/opendgus", doc="QR content"),
         Variable(name="raw", init=1234, doc="shown with the 0# font"),
     ])
     hdr = lambda t: [Rect(x=0, y=0, w=W, h=S(64), fill="surface", radius=0),
