@@ -62,8 +62,9 @@ class ControlSpec:
     pre_encode: Callable[[dict, tuple[int, int]], dict] | None = None
     post_encode: Callable[[bytearray, dict], None] | None = None
     post_decode: Callable[[bytes, dict], None] | None = None
-    # touch only: FE (auto-upload) vs FD (never upload) selectable
+    # touch only: FE (auto-upload) vs FD (never upload) selectable, and which one the editor creates by default
     upload_flag: bool = True
+    upload_default: bool = True
     match: Callable[[bytes], bool] | None = None   # extra decode discrimination (shared type codes)
 
 
@@ -186,7 +187,7 @@ def _touch_encode(spec: ControlSpec, v: dict, screen) -> bytearray:
     if spec.code is None:                     # basic touch: TP_Code is the key code
         b[14:16] = (int(v.get("key_code", 0xFF00)) & 0xFFFF).to_bytes(2, "big")
     else:
-        b[14] = 0xFE if v.get("auto_upload", True) or not spec.upload_flag else 0xFD
+        b[14] = 0xFE if v.get("auto_upload", spec.upload_default) or not spec.upload_flag else 0xFD
         b[15] = spec.code
     for off in range(16, spec.length, 16):    # continuation chunks start with 0xFE
         b[off] = 0xFE
@@ -203,7 +204,7 @@ def defaults(key: str) -> dict:
         if spec.code is None:
             vals["key_code"] = 0xFF00
         else:
-            vals["auto_upload"] = True
+            vals["auto_upload"] = spec.upload_default
         vals["ivr_code"] = 0
     else:
         vals["sp"] = 0xFFFF

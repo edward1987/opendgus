@@ -20,6 +20,7 @@ classifiers = [
 dependencies = [
   "pillow>=10",
   "pyserial>=3.5",
+  "pydantic>=2.7",
 ]
 
 [project.optional-dependencies]

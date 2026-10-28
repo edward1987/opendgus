@@ -74,6 +74,68 @@ def decode(b: bytes):
     out.append(f"file length = {len(b)} bytes (0x{len(b):X})")
     return "\n".join(out)
 
+# ------------------------------------------------------------------ writer
+
+from dataclasses import dataclass  # noqa: E402
+
+BAUD_CLOCK = 3225600            # UART2 divider = 3225600 / baud, max 0x3FF
+SUPPORTED_BAUDS = (4800, 9600, 19200, 38400, 57600, 115200, 230400, 460800)   # exact dividers
+
+
+@dataclass
+class CfgOptions:
+    """The options OpenDGUS writes. Panel timing (0x10-0x1F) and touch-controller setup (0x20-0x23) are left
+    disabled so the display keeps its factory values; their exact meaning is not hardware-verified yet."""
+    rotation: int = 0             # 0, 90, 180, 270
+    uart_crc: bool = False
+    music_wae: bool = False       # False = buzzer
+    load_22: bool = True          # load 22.bin into variable memory at power-on
+    touch_auto_upload: bool = True
+    touch_beep: bool = True
+    backlight_standby: bool = False
+    wae_id: int = 0
+    background_icl: int = 32      # 32 on 16 MB flash, 23 on 8 MB COF modules
+    touch_rate_div: int = 0x28
+    baud: int = 115200
+    backlight: int = 64           # %
+    backlight_standby_level: int = 0   # %
+    backlight_standby_time_ms: int = 0
+
+
+def sys_cfg_byte(o: CfgOptions) -> int:
+    rot = {0: 0, 90: 1, 180: 2, 270: 3}[o.rotation]
+    return ((0x80 if o.uart_crc else 0) | (0x40 if o.music_wae else 0) | (0x20 if o.load_22 else 0)
+            | (0x10 if o.touch_auto_upload else 0) | (0x08 if o.touch_beep else 0)
+            | (0x04 if o.backlight_standby else 0) | rot)
+
+
+def build_cfg(o: CfgOptions | None = None) -> bytes:
+    """A 36-byte T5LCFG.CFG like DWIN's own sample: common options only.
+
+    Never set here: SYS_CFG1 (0x06: NAND format, *erase internal flash*, 8051 encryption), LCD timing (0x10 stays
+    0x0000 so 0x12-0x1E are ignored), touch controller (0x20 stays 0x00)."""
+    o = o or CfgOptions()
+    div = round(BAUD_CLOCK / o.baud)
+    if not 1 <= div <= 0x3FF or abs(BAUD_CLOCK / div - o.baud) / o.baud > 0.02:
+        raise ValueError(f"baud {o.baud} not reachable (divider {BAUD_CLOCK / o.baud:.2f}); "
+                         f"use one of {', '.join(map(str, SUPPORTED_BAUDS))}")
+    if not 0x10 <= o.background_icl <= 0x3F:
+        raise ValueError("background ICL must be file 16-63")
+    b = bytearray(0x24)
+    b[0:5] = b"T5LC1"
+    b[5] = sys_cfg_byte(o)
+    b[6] = 0x00
+    b[7] = o.wae_id & 0x3F
+    b[8] = o.background_icl
+    b[9] = o.touch_rate_div & 0xFF
+    b[10:12] = div.to_bytes(2, "big")
+    b[12] = max(0, min(100, o.backlight))
+    b[13] = max(0, min(100, o.backlight_standby_level))
+    b[14:16] = min(0xFFFF, o.backlight_standby_time_ms // 10).to_bytes(2, "big")
+    # 0x10 LCD_CFG_EN = 0x0000 and 0x20 TP_SET_EN = 0x00: panel and touch keep their factory configuration
+    return bytes(b)
+
+
 if __name__ == "__main__":
     data = open(sys.argv[1], "rb").read()
     print(data.hex(" ").upper())
