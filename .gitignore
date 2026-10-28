@@ -1,0 +1,17 @@
+# Third-party DWIN tools/docs (~1 GB) - re-download via vendor/README.md; never redistributed
+vendor/*
+!vendor/README.md
+# Flash dumps of the user's own display
+backup/
+# Python / build outputs
+.venv/
+__pycache__/
+*.egg-info/
+build/
+dist/
+re/re5/out/
+# Node / Electron
+node_modules/
+app/out/
+app/release/
+tools/csharp_harness/out/

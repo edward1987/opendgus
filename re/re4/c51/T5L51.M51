@@ -1,0 +1,92 @@
+BL51 BANKED LINKER/LOCATER V6.22.4.0                                                    10/28/2026  13:02:07  PAGE 1
+
+
+BL51 BANKED LINKER/LOCATER V6.22.4.0, INVOKED BY:
+C:\KEIL_V5\C51\BIN\BL51.EXE STARTUP_T5L.OBJ, MAIN.OBJ TO T5L51 RAMSIZE (256) XDATA (0X8000)
+
+
+MEMORY MODEL: SMALL
+
+
+INPUT MODULES INCLUDED:
+  STARTUP_T5L.OBJ (?C_STARTUP)
+  MAIN.OBJ (MAIN)
+  C:\KEIL_V5\C51\LIB\C51S.LIB (?C?SLCMP)
+
+
+LINK MAP OF MODULE:  T5L51 (?C_STARTUP)
+
+
+            TYPE    BASE      LENGTH    RELOCATION   SEGMENT NAME
+            -----------------------------------------------------
+
+            * * * * * * *   D A T A   M E M O R Y   * * * * * * *
+            REG     0000H     0008H     ABSOLUTE     "REG BANK 0"
+            DATA    0008H     0008H     UNIT         _DATA_GROUP_
+                    0010H     0010H                  *** GAP ***
+            BIT     0020H.0   0000H.1   UNIT         _BIT_GROUP_
+                    0020H.1   0000H.7                *** GAP ***
+            IDATA   0021H     0001H     UNIT         ?STACK
+
+            * * * * * * *   C O D E   M E M O R Y   * * * * * * *
+            CODE    0000H     0003H     ABSOLUTE     
+                    0003H     00F5H                  *** GAP ***
+            CODE    00F8H     0008H     ABSOLUTE     
+                    0100H     0700H                  *** GAP ***
+            CODE    0800H     0091H     UNIT         ?PR?MAIN?MAIN
+            CODE    0891H     003DH     UNIT         ?C_C51STARTUP
+            CODE    08CEH     003DH     UNIT         ?PR?_VP_WRITE?MAIN
+            CODE    090BH     0038H     UNIT         ?PR?_VP_READ?MAIN
+            CODE    0943H     0017H     UNIT         ?PR?_VP_SELECT?MAIN
+            CODE    095AH     0016H     UNIT         ?C?LIB_CODE
+            CODE    0970H     0014H     UNIT         ?PR?_DGUS_SET_PAGE?MAIN
+            CODE    0984H     0014H     UNIT         ?PR?UART2_INIT?MAIN
+            CODE    0998H     0008H     UNIT         ?PR?_UART2_PUTC?MAIN
+
+
+
+OVERLAY MAP OF MODULE:   T5L51 (?C_STARTUP)
+
+
+SEGMENT                            BIT_GROUP          DATA_GROUP 
+  +--> CALLED SEGMENT           START    LENGTH     START    LENGTH
+-------------------------------------------------------------------
+?C_C51STARTUP                   -----    -----      -----    -----
+  +--> ?PR?MAIN?MAIN
+
+?PR?MAIN?MAIN                   -----    -----      0008H    0008H
+  +--> ?PR?UART2_INIT?MAIN
+  +--> ?PR?_VP_WRITE?MAIN
+  +--> ?PR?_VP_READ?MAIN
+  +--> ?PR?_DGUS_SET_PAGE?MAIN
+BL51 BANKED LINKER/LOCATER V6.22.4.0                                                  10/28/2026  13:02:07  PAGE 2
+
+
+  +--> ?PR?_UART2_PUTC?MAIN
+
+?PR?_VP_WRITE?MAIN              0020H.0  0000H.1    -----    -----
+  +--> ?PR?_VP_SELECT?MAIN
+
+?PR?_VP_READ?MAIN               0020H.0  0000H.1    -----    -----
+  +--> ?PR?_VP_SELECT?MAIN
+
+?PR?_DGUS_SET_PAGE?MAIN         -----    -----      -----    -----
+  +--> ?PR?_VP_WRITE?MAIN
+
+
+
+SYMBOL TABLE OF MODULE:  T5L51 (?C_STARTUP)
+
+  VALUE           TYPE          NAME
+  ----------------------------------
+
+  -------         MODULE        ?C?SLCMP
+  C:095AH         PUBLIC        ?C?SLCMP
+  -------         ENDMOD        ?C?SLCMP
+
+******************************************************************************
+* RESTRICTED VERSION WITH 0800H BYTE CODE SIZE LIMIT; USED: 0195H BYTE (19%) *
+******************************************************************************
+
+Program Size: data=17.1 xdata=0 code=427
+LINK/LOCATE RUN COMPLETE.  0 WARNING(S),  0 ERROR(S)

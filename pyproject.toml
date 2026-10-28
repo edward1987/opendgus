@@ -1,0 +1,36 @@
+[build-system]
+requires = ["hatchling>=1.25"]
+build-backend = "hatchling.build"
+
+[project]
+name = "opendgus"
+version = "0.1.0"
+description = "Open-source designer and toolkit for DWIN T5L (DGUS II) smart displays"
+readme = "README.md"
+license = "GPL-3.0-or-later"
+license-files = ["LICENSE"]
+requires-python = ">=3.11"
+authors = [{ name = "OpenDGUS contributors" }]
+keywords = ["dwin", "dgus", "t5l", "hmi", "lcd", "display", "designer", "mcp"]
+classifiers = [
+  "Programming Language :: Python :: 3",
+  "Operating System :: OS Independent",
+  "Topic :: Software Development :: Embedded Systems",
+]
+dependencies = [
+  "pillow>=10",
+  "pyserial>=3.5",
+]
+
+[project.optional-dependencies]
+dev = ["pytest>=8"]
+
+[project.scripts]
+opendgus-load = "opendgus.device.dwinload:main"
+opendgus-emu = "opendgus.emulator.dwinemu:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/opendgus"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
