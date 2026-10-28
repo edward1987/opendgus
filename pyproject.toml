@@ -24,6 +24,8 @@ dependencies = [
   "mcp>=2.3",
   "fastapi>=0.115",
   "uvicorn>=0.30",
+  "anthropic>=2.3",
+  "openai>=1.40",
 ]
 
 [project.optional-dependencies]

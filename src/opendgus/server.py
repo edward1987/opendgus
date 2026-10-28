@@ -150,6 +150,55 @@ def create_app(token: str = TOKEN) -> FastAPI:
         except (WebSocketDisconnect, RuntimeError):
             return
 
+    # ------------------------------------------------------------------ AI designer
+    from . import ai as AI
+    sessions: dict[str, AI.ChatSession] = {}
+
+    @app.get("/api/ai/providers")
+    def ai_providers():
+        return AI.PROVIDERS
+
+    @app.websocket("/ws/ai")
+    async def ws_ai(socket: WebSocket):
+        """Client sends {"type":"chat","session","text","provider","api_key","model","base_url","effort"} or
+        {"type":"reset","session"}; the server streams agent events back (see opendgus.ai.agent)."""
+        if socket.query_params.get("token") != token:
+            await socket.close(code=4401)
+            return
+        await socket.accept()
+        loop = asyncio.get_running_loop()
+        try:
+            while True:
+                msg = await socket.receive_json()
+                sid = str(msg.get("session", "default"))
+                if msg.get("type") == "reset":
+                    sessions.pop(sid, None)
+                    await socket.send_json({"type": "reset", "session": sid})
+                    continue
+                if msg.get("type") != "chat":
+                    continue
+                session = sessions.setdefault(sid, AI.ChatSession())
+                queue: asyncio.Queue = asyncio.Queue()
+
+                def emit(ev, _sid=sid):
+                    loop.call_soon_threadsafe(queue.put_nowait, {**ev, "session": _sid})
+
+                def work():
+                    AI.run(session, str(msg.get("text", "")), emit, provider=msg.get("provider", "anthropic"),
+                           api_key=msg.get("api_key"), model=msg.get("model"), base_url=msg.get("base_url"),
+                           effort=msg.get("effort", "medium"))
+                    loop.call_soon_threadsafe(queue.put_nowait, None)
+
+                task = loop.run_in_executor(None, work)
+                while True:
+                    ev = await queue.get()
+                    if ev is None:
+                        break
+                    await socket.send_json(ev)
+                await task
+        except (WebSocketDisconnect, RuntimeError):
+            return
+
     return app
 
 
