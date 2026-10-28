@@ -212,12 +212,12 @@ Source: [AG] Chapter 5, p.49-77, L1504-2945. "D3..D0" means the bytes of a 2-wor
 | 0x0010 | RTC | R/W | YY MM DD WW hh mm ss 00 (hex) | 1647 |
 | 0x0014 | PIC_Now | R | Current page | 1659 |
 | 0x0015 | GUI_Status | R | 1 = processing 13/14 | 1664 |
-| 0x0016 | TP_Status | R/W | 5A flag, state (1 = press, 2 = lift, 3 = hold), X, Y | 1669 |
-| 0x0031 | LED_Now | R | Current backlight value | 1692 |
+| 0x0016 | TP_Status | R/W | 5A flag, state (1 = press, 2 = lift, 3 = hold), X, Y. **[V]** the 5A flag stays until the MCU clears it | 1669 |
+| 0x0031 | LED_Now | R | Current backlight value. **[V]** reads `5A` + level % | 1692 |
 | 0x0032-0x0039 | AD0-AD7 | R | Raw ADC | 1698 |
 | 0x007A / 0x007B | LCD_HOR / LCD_VER | R | Resolution | 1708 |
 | 0x0080 | System_Config | R/W | D3 = 0x5A apply. D0 = live copy of CFG 0x05 (bits .4/.3/.2/.1-0 writable). Not saved. | 1719 |
-| **0x0082** | LED_Config | W | D3 = on brightness, D2 = standby brightness, D1:0 = time (10 ms). Plain `5A A5 04 82 00 82 0A` sets brightness. | 1749 |
+| **0x0082** | LED_Config | W | D3 = on brightness, D2 = standby brightness, D1:0 = time (10 ms). Plain `5A A5 04 82 00 82 0A` sets brightness. **[V]** with 0x0080 D0 bit 2 set the panel dims after the time; after turning standby off it stays dim until the 1-byte write | 1749 |
 | **0x0084** | PIC_Set | W | `5A 01` + page → page switch | 1771 |
 | 0x0086 / 0x0088 | PWM0 / PWM1 set | W | 5A + divider + precision | 1786 |
 | 0x0092 / 0x0093 | PWM0 / PWM1 out | R/W | Duty cycle | 1816 |

@@ -384,7 +384,9 @@
     "setup": "Configurează",
     "providersError": "Furnizorii AI nu au putut fi încărcați: {{error}}",
     "mcpHint": "Puteți conecta și Claude sau alt AI prin serverul MCP OpenDGUS: modificările apar aici live.",
-    "mcpConnect": "Conectați o aplicație AI (MCP)"
+    "mcpConnect": "Conectați o aplicație AI (MCP)",
+    "s6": "Fă un sketch Arduino Nano care pornește un releu de la un buton",
+    "openController": "Deschide codul pentru controler"
   },
   "validate": {
     "title": "Verificare",
@@ -523,5 +525,42 @@
     "unchanged": "neschimbată",
     "saverNeedsController": "Firmware-ul ecranului nu poate schimba singur pagina, așa că screensaver-ul e afișat și ascuns de controler. Codul generat (Arduino, Pico, ESP32, Raspberry Pi) face deja asta. Fără controler, pagina de screensaver funcționează ca o pagină obișnuită: o atingere o părăsește.",
     "openController": "Cod pentru controler…"
+  },
+  "controller": {
+    "title": "Cod pentru controler",
+    "tabCode": "Acest proiect",
+    "tabSamples": "Exemple",
+    "board": "Placă",
+    "chooseBoard": "Alege o placă…",
+    "lang_arduino": "Arduino (C++)",
+    "lang_micropython": "MicroPython",
+    "lang_python": "Python (Raspberry Pi / PC)",
+    "mqtt": "MQTT + Home Assistant",
+    "mqttHint": "Publică fiecare variabilă prin MQTT; Home Assistant le găsește singur",
+    "generate": "Generează codul",
+    "regenerate": "Actualizează codul",
+    "openFolder": "Deschide dosarul",
+    "intro": "OpenDGUS scrie programul pentru placa ce comandă acest ecran: primește fiecare atingere, scrie valori pe ecran, pornește estomparea automată la start și rulează screensaver-ul. Alege placa.",
+    "wiring": "Conexiuni",
+    "baudWarn": "Ecranul merge la {{baud}} baud, prea repede pentru portul acestei plăci (max {{max}}).",
+    "setBaud": "Folosește {{max}} baud",
+    "generated": "{{count}} fișiere scrise.",
+    "userCode": "Codul tău dintre marcajele USER CODE se păstrează la actualizare.",
+    "compile": "Compilează",
+    "check": "Verifică",
+    "port": "Portul plăcii…",
+    "refreshPorts": "Reîmprospătează porturile",
+    "upload": "Încarcă pe placă",
+    "busy_gen": "Se scrie codul…",
+    "busy_build": "Se compilează (prima dată se instalează pachetul plăcii, câteva minute)…",
+    "busy_flash": "Se încarcă…",
+    "noCli": "Pentru codul Arduino e nevoie de arduino-cli:",
+    "compiled": "Compilare reușită",
+    "uploaded": "Încărcat: placa rulează noul program",
+    "failed": "Eșuat",
+    "samplesHint": "Un exemplu creează un proiect nou: un design mic și codul lui pentru controler, gata de încărcat.",
+    "sampleFolder": "Dosarul pentru noul proiect exemplu",
+    "createSample": "Creează proiectul",
+    "needsNetwork": "Necesită o placă cu rețea (Pico 2 W, ESP32, Raspberry Pi, PC)"
   }
 }

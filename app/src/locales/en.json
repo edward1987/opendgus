@@ -382,7 +382,9 @@
     "setup": "Set up",
     "providersError": "Could not load the AI providers: {{error}}",
     "mcpHint": "You can also connect Claude or another AI through the OpenDGUS MCP server: its changes appear here live.",
-    "mcpConnect": "Connect an AI app (MCP)"
+    "mcpConnect": "Connect an AI app (MCP)",
+    "s6": "Build an Arduino Nano sketch that turns on a relay from a button",
+    "openController": "Open the controller code"
   },
   "validate": {
     "title": "Validate",
@@ -519,5 +521,42 @@
     "unchanged": "unchanged",
     "saverNeedsController": "The display firmware cannot switch pages by itself, so your controller shows and hides the screensaver. The generated code (Arduino, Pico, ESP32, Raspberry Pi) already does it. Without a controller the screensaver page still works as a page: a touch leaves it.",
     "openController": "Controller code…"
+  },
+  "controller": {
+    "title": "Controller code",
+    "tabCode": "This project",
+    "tabSamples": "Samples",
+    "board": "Board",
+    "chooseBoard": "Choose a board…",
+    "lang_arduino": "Arduino (C++)",
+    "lang_micropython": "MicroPython",
+    "lang_python": "Python (Raspberry Pi / PC)",
+    "mqtt": "MQTT + Home Assistant",
+    "mqttHint": "Publish every variable over MQTT; Home Assistant finds them by itself",
+    "generate": "Generate code",
+    "regenerate": "Update code",
+    "openFolder": "Open folder",
+    "intro": "OpenDGUS writes the program for the board that drives this display: it receives every touch, writes values to the screen, switches auto-dim on at start-up and runs the screensaver. Choose your board.",
+    "wiring": "Wiring",
+    "baudWarn": "The display runs at {{baud}} baud, too fast for this board's display port (max {{max}}).",
+    "setBaud": "Use {{max}} baud",
+    "generated": "{{count}} files written.",
+    "userCode": "Your code between the USER CODE markers is kept when you update.",
+    "compile": "Compile",
+    "check": "Check",
+    "port": "Board port…",
+    "refreshPorts": "Refresh ports",
+    "upload": "Upload to board",
+    "busy_gen": "Writing code…",
+    "busy_build": "Building (the first time installs the board package, a few minutes)…",
+    "busy_flash": "Uploading…",
+    "noCli": "Building Arduino code needs arduino-cli:",
+    "compiled": "Build OK",
+    "uploaded": "Uploaded: the board is running the new program",
+    "failed": "Failed",
+    "samplesHint": "A sample creates a new project: a small design and its controller code, ready to upload.",
+    "sampleFolder": "Folder for the new sample project",
+    "createSample": "Create project",
+    "needsNetwork": "Needs a board with a network (Pico 2 W, ESP32, Raspberry Pi, PC)"
   }
 }

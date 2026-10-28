@@ -101,6 +101,7 @@ export interface Project {
   variables: Variable[];
   pages: Page[];
   screensaver?: Screensaver;
+  controller?: { board: string | null; mqtt: boolean };
 }
 
 export interface WidgetInfo {

@@ -28,7 +28,9 @@ INSTRUCTIONS = """OpenDGUS designs screens for DWIN T5L (DGUS II) touch displays
 Start with open_project or create_project (pick a display profile or width/height, optionally a template).
 Create variables first, then add elements (static art) and controls (widgets bound to variables).
 ALWAYS check your work with render_page and validate. Read the resource opendgus://guide for layout rules.
-Never call device_upload unless the user explicitly asked to write to the physical display."""
+Never call device_upload unless the user explicitly asked to write to the physical display.
+For board code (Arduino, Pico, ESP32, Raspberry Pi): generate_controller_project, then compile_controller until OK;
+see the guide section "Controller projects". flash_controller only when the user asked."""
 
 
 def _adapt(fn):
@@ -84,7 +86,8 @@ def build_server() -> MCPServer:
         return (f"Design a DWIN touch screen UI ({width}x{height}) for: {description}.\n"
                 "Read opendgus://guide first. If no project is open, create one in a new folder. Create the "
                 "variables, build each page with cards, labels and widgets, then render_page every page and "
-                "fix the layout until validate reports no issues. Summarise the variables for the MCU at the end.")
+                "fix the layout until validate reports no issues. Summarise the variables for the MCU at the end. "
+                "If a controller board is named, also generate and compile its code (generate_controller_project).")
 
     return mcp
 

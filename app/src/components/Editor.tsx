@@ -3,6 +3,7 @@ import { useTranslation } from "react-i18next";
 import { duplicateItems, moveBy, removeItems, updateItems } from "../lib/project";
 import { currentPage, selectedItems, useStore } from "../store";
 import { CanvasView } from "./CanvasView";
+import { ControllerDialog } from "./ControllerDialog";
 import { BuildDialog, DeviceDialog, ValidateDialog } from "./Dialogs";
 import { LeftPanel } from "./LeftPanel";
 import { McpDialog } from "./McpDialog";
@@ -25,6 +26,7 @@ export function Editor() {
   const dialog = useStore((s) => s.dialog);
   const setDialog = useStore((s) => s.setDialog);
   const mode = useStore((s) => s.mode);
+  const folder = useStore((s) => s.folder);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
@@ -90,6 +92,7 @@ export function Editor() {
       {dialog === "theme" && <ThemeDialog onClose={() => setDialog(null)} />}
       {dialog === "mcp" && <McpDialog onClose={() => setDialog(null)} />}
       {dialog === "settings" && <SettingsDialog onClose={() => setDialog(null)} />}
+      {dialog === "controller" && <ControllerDialog key={folder ?? ""} onClose={() => setDialog(null)} />}
     </div>
   );
 }

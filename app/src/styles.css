@@ -645,3 +645,37 @@ button.chip.on { color: var(--accent); border-color: var(--accent); background: 
 .pct-field input[type="range"] { flex: 1; min-width: 80px; padding: 0; height: 20px; border: none; background: none; box-shadow: none; accent-color: var(--accent); }
 .pct-field input[type="number"], .sec-field input[type="number"] { width: 84px; flex: none; }
 .sec-field .unit { margin-right: 4px; }
+.seg { display: inline-flex; gap: 2px; padding: 3px; border-radius: 9px; background: var(--bg-2); border: 1px solid var(--border); margin-bottom: 12px; }
+.seg button { display: inline-flex; align-items: center; gap: 6px; border: none; background: none; padding: 5px 12px; border-radius: 7px; color: var(--text-2); cursor: pointer; }
+.seg button.on { background: var(--raised); color: var(--text); }
+.ctl { display: flex; flex-direction: column; gap: 10px; }
+.ctl-top { display: flex; align-items: flex-end; gap: 12px; flex-wrap: wrap; }
+.ctl-field { display: flex; flex-direction: column; gap: 4px; font-size: 12px; color: var(--muted); }
+.ctl-field.row { flex-direction: row; align-items: center; color: var(--text-2); padding-bottom: 6px; }
+.ctl-field select { min-width: 300px; }
+.ctl-info { display: flex; gap: 16px; align-items: flex-start; flex-wrap: wrap; }
+.ctl-info .group-title { margin-top: 0; }
+.ctl-wiring { margin: 0; padding-left: 18px; font-family: var(--mono); font-size: 12px; color: var(--text-2); }
+.ctl-code { display: grid; grid-template-columns: 220px minmax(0, 1fr); gap: 10px; min-height: 0; }
+.ctl-files { display: flex; flex-direction: column; gap: 2px; max-height: 380px; overflow: auto; }
+.ctl-file { display: flex; align-items: center; gap: 6px; text-align: left; border: none; background: none; padding: 5px 8px; border-radius: 6px; font-size: 12px; color: var(--text-2); cursor: pointer; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.ctl-file:hover { background: var(--hover); }
+.ctl-file.on { background: var(--accent-soft); color: var(--accent); }
+.ctl-view { display: flex; flex-direction: column; min-width: 0; border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.ctl-view-head { display: flex; align-items: center; gap: 8px; padding: 4px 8px; background: var(--panel-2); border-bottom: 1px solid var(--border); }
+.code-view { margin: 0; padding: 10px 12px; max-height: 380px; overflow: auto; font-family: var(--mono); font-size: 12px; line-height: 1.5; background: var(--bg-2); color: var(--text); white-space: pre; user-select: text; }
+.ctl-actions { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+.ctl-actions select { min-width: 220px; width: auto; }
+.sample-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr)); gap: 10px; }
+.sample-card { display: flex; flex-direction: column; gap: 6px; padding: 12px; border-radius: 10px; border: 1px solid var(--border); background: var(--panel-2); }
+.sample-card p { margin: 0; flex: 1; }
+.sample-card.off { opacity: 0.55; }
+.sample-card .btn { align-self: flex-start; }
+.sample-title { font-weight: 600; display: flex; align-items: center; gap: 6px; }
+.controller-modal .seg { align-self: flex-start; width: fit-content; }
+.ctl-file svg { flex: none; }
+.ctl-file { direction: ltr; min-height: 26px; }
+.ai-code { position: relative; margin: 6px 0; }
+.ai-code pre { margin: 0; padding: 8px 10px; max-height: 320px; overflow: auto; border-radius: 7px; background: var(--bg-2); border: 1px solid var(--border); font-family: var(--mono); font-size: 11.5px; white-space: pre; user-select: text; }
+.ai-code .icon-btn { position: absolute; top: 4px; right: 4px; }
+.ai-file-card { align-self: flex-start; margin: 2px 0 4px 0; }

@@ -8,7 +8,8 @@ import { useStore } from "../store";
 import { Icon } from "./Icons";
 import { SearchSelect } from "./SearchSelect";
 
-const SUGGESTIONS = ["s1", "s2", "s3", "s4", "s5"];
+const SUGGESTIONS = ["s1", "s2", "s3", "s4", "s5", "s6"];
+const CONTROLLER_TOOLS = new Set(["generate_controller_project", "compile_controller"]);
 
 export function AiPanel() {
   const { t } = useTranslation();
@@ -215,11 +216,18 @@ function Item({ item, live }: { item: ChatItem; live: boolean }) {
       );
     case "tool":
       return (
-        <div className={`tool-chip ${item.status}`} title={[inputPreview(item.input), item.summary].filter(Boolean).join("\n→ ")}>
-          {item.status === "running" ? <span className="mini-spin" /> : <Icon name={item.status === "ok" ? "check" : "close"} size={12} />}
-          <span className="tool-name">{item.name}</span>
-          <span className="tool-sum">{item.status === "running" ? inputPreview(item.input, 80) : item.summary}</span>
-        </div>
+        <>
+          <div className={`tool-chip ${item.status}`} title={[inputPreview(item.input), item.summary].filter(Boolean).join("\n→ ")}>
+            {item.status === "running" ? <span className="mini-spin" /> : <Icon name={item.status === "ok" ? "check" : "close"} size={12} />}
+            <span className="tool-name">{item.name}</span>
+            <span className="tool-sum">{item.status === "running" ? inputPreview(item.input, 80) : item.summary}</span>
+          </div>
+          {item.status === "ok" && !live && CONTROLLER_TOOLS.has(item.name) && (
+            <button className="btn sm ai-file-card" onClick={() => useStore.getState().setDialog("controller")}>
+              <Icon name="chip" size={14} /> {t("ai.openController")}
+            </button>
+          )}
+        </>
       );
     case "image":
       return (
@@ -239,8 +247,31 @@ function Item({ item, live }: { item: ChatItem; live: boolean }) {
   }
 }
 
-/** Minimal formatting for assistant text: `code`, **bold**, keeps line breaks. No HTML is ever injected. */
+/** Minimal formatting for assistant text: ```fenced code```, `code`, **bold**, keeps line breaks. No HTML is ever
+ *  injected. */
 function Rich({ text }: { text: string }) {
+  const blocks = text.split(/```[^\n]*\n?([\s\S]*?)(?:```|$)/g);
+  if (blocks.length > 1) {
+    // split() with one capture group alternates prose / code
+    return <>{blocks.map((b, i) => (i % 2 ? <CodeBlock key={i} code={b.replace(/\n$/, "")} /> : <Inline key={i} text={b} />))}</>;
+  }
+  return <Inline text={text} />;
+}
+
+function CodeBlock({ code }: { code: string }) {
+  const { t } = useTranslation();
+  const [copied, setCopied] = useState(false);
+  return (
+    <div className="ai-code">
+      <button className="icon-btn xs" title={t("mcp.copy")} onClick={() => { void navigator.clipboard.writeText(code); setCopied(true); setTimeout(() => setCopied(false), 1500); }}>
+        <Icon name={copied ? "check" : "copy"} size={13} />
+      </button>
+      <pre>{code}</pre>
+    </div>
+  );
+}
+
+function Inline({ text }: { text: string }) {
   const parts = text.split(/(`[^`\n]+`|\*\*[^*\n]+\*\*)/g);
   const out: ReactNode[] = parts.map((p, i) => {
     if (p.startsWith("`") && p.endsWith("`") && p.length > 2) return <code key={i}>{p.slice(1, -1)}</code>;

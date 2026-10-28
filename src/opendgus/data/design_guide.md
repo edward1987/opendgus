@@ -32,3 +32,31 @@ widgets bound to variables that a microcontroller (MCU) reads and writes over UA
 ## Variables and the MCU
 `build` writes `vars.h` with `#define VP_<NAME> 0x....`. The MCU writes values with `5A A5 05 82 <VP> <value>` and
 receives touch changes as `5A A5 06 83 <VP> 01 <value>`.
+
+## Power: auto-dim and screensaver
+- Auto-dim is done by the display itself: `set_display(standby_enabled=True, standby_level=10,
+  standby_timeout_s=60)` (max 655 s). A touch on a dimmed screen only wakes it.
+- A screensaver needs the controller (the display cannot switch pages by itself): `set_screensaver(image=
+  "assets/...png|gif", timeout_s=120)` builds the page(s); the generated controller code shows and hides it.
+
+## Controller projects (Arduino, Pico, ESP32, Raspberry Pi)
+When the user asks for a script/sketch/program for a board ("make an Arduino Nano sketch that turns on a relay
+when I press a button"), do both halves:
+1. Design or adjust the display for the task (variables, controls, render, validate). Every value the board must
+   react to is a variable on a touch control (toggle, button with a set/step action, slider); every value the board
+   shows is a variable on a number/progress/indicator/needle.
+2. `generate_controller_project(board=..., code={...})` with the board id from `list_controller_boards` (nano, uno,
+   mega, pico, pico2, pico2w, esp32: Arduino C++; mp_pico, mp_pico2w, mp_esp32: MicroPython; rpi, pc: Python).
+   Pick MicroPython only when the user says so; "Pico" alone means Arduino C++ for the Pico.
+   `code` fills USER CODE regions: `globals`, `setup`, `loop`, and one region per touch variable named after its
+   constant (`VP_RELAY`) whose code runs when the display sends a new `value`. In C++ use `dgus.write(VP_X, v)`,
+   `dgus.setPage(PAGE_X)`; in Python `dgus.write(VP_X, v)`, `dgus.set_page(PAGE_X)`. Never block in `loop` (no
+   long `delay`/`sleep`): use millis()/ticks_ms() timers so touches keep working. Values are 16-bit integers;
+   decimals are fixed-point (215 = 21.5 with decimals=1).
+3. `compile_controller` and fix every error, then compile again until it is OK. If arduino-cli is missing, say so
+   and give the install link from the result.
+4. Answer with the wiring (from the result / README), which pins the code uses, and how to upload (the Controller
+   button in the toolbar has Compile and Upload). Never call flash_controller yourself.
+Arduino Nano/Uno use SoftwareSerial on D10/D11, reliable only up to 38400 baud: set the display baud with
+`set_display(baud=38400)` first. Home Assistant / MQTT: `generate_controller_project(..., mqtt=True)` on a network
+board (pico2w, esp32, mp_pico2w, mp_esp32, rpi, pc).
