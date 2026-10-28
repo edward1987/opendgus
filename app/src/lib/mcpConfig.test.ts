@@ -16,7 +16,7 @@ describe("mcpSnippets", () => {
   it("quotes paths with spaces for the codex CLI and uses TOML literal strings", () => {
     const s = mcpSnippets({ command: exe, args: [], source: "bundled" });
     expect(s.find((x) => x.id === "codex")!.text).toBe(`codex mcp add opendgus -- "${exe}"`);
-    expect(s.find((x) => x.id === "codexToml")!.text).toBe(`[mcp_servers.opendgus]\ncommand = '${exe}'`);
+    expect(s.find((x) => x.id === "codexToml")!.text).toBe(`[mcp_servers.opendgus]\ncommand = '${exe}'\nstartup_timeout_sec = 30`);
   });
 
   it("includes args for the python fallback", () => {

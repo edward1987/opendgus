@@ -19,6 +19,8 @@ const api = {
   getSecret: (name: string) => ipcRenderer.invoke("secret:get", name),
   deleteSecret: (name: string) => ipcRenderer.invoke("secret:delete", name),
   secretsEncrypted: () => ipcRenderer.invoke("secret:available"),
+  mcpPrepare: () => ipcRenderer.invoke("mcp:prepare"),
+  mcpCodex: (action: "install" | "remove", project: string | null) => ipcRenderer.invoke("mcp:codex", action, project),
 };
 
 contextBridge.exposeInMainWorld("opendgus", api);

@@ -3,6 +3,7 @@ import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell 
 import * as fs from "fs";
 import * as path from "path";
 import { Backend, BackendInfo, findBackendRoot, findBundledBackend, mcpCommand, McpCommand, serverLaunch } from "./backend";
+import { codexStatus, installCodex, removeCodex, stableMcpCommand } from "./mcpInstall";
 
 interface Cli {
   smokeOut?: string;
@@ -40,6 +41,7 @@ if (cli.smokeOut) app.setPath("userData", path.join(app.getPath("temp"), "opendg
 let backendInfo: BackendInfo | null = null;
 let backendError: string | null = null;
 let mcp: McpCommand | null = null;
+let sidecarDir: string | null = null;
 let win: BrowserWindow | null = null;
 
 // ------------------------------------------------------------------ recent projects
@@ -282,6 +284,24 @@ function registerIpc() {
     }
   });
   ipcMain.handle("secret:available", () => safeStorage.isEncryptionAvailable());
+  // MCP for external AI apps: a command that still works after OpenDGUS quits, and one-click Codex registration
+  const mcpReady = async () => {
+    if (mcp) mcp = await stableMcpCommand(mcp, sidecarDir, app.getPath("userData"), app.getVersion());
+    return mcp;
+  };
+  ipcMain.handle("mcp:prepare", async () => {
+    try {
+      const cmd = await mcpReady();
+      return { mcp: cmd, codex: cmd ? codexStatus(cmd) : null, error: null };
+    } catch (e) {
+      return { mcp, codex: null, error: String((e as Error).message || e) };
+    }
+  });
+  ipcMain.handle("mcp:codex", async (_e, action: "install" | "remove", project: string | null) => {
+    const cmd = await mcpReady();
+    if (!cmd) throw new Error("MCP server not available");
+    return action === "install" ? installCodex(cmd, project) : removeCodex(cmd);
+  });
   ipcMain.on("app:rendered", () => {
     if (cli.smokeOut) void smokeCapture("ready");
   });
@@ -305,6 +325,7 @@ if (!cli.smokeOut && !app.requestSingleInstanceLock()) {
     const root = findBackendRoot(app.getAppPath(), process.resourcesPath);
     // Packaged: the PyInstaller sidecar in resources/backend (no Python needed). Dev: Python from the repo .venv.
     const sidecar = app.isPackaged ? findBundledBackend(process.resourcesPath) : null;
+    sidecarDir = sidecar;
     mcp = mcpCommand(root, sidecar);
     try {
       backendInfo = await backend.start(serverLaunch(root, sidecar, cli.project));

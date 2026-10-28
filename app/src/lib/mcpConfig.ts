@@ -6,6 +6,15 @@ export interface McpCommand {
   source: "bundled" | "venv" | "python";
 }
 
+/** Registration of OpenDGUS in an AI app's config (see electron/mcpInstall.ts). */
+export interface McpAppStatus {
+  config: string;
+  command: string | null;
+  current: boolean;
+  exists: boolean;
+  skill: boolean;
+}
+
 export interface McpSnippet {
   id: "claude" | "codex" | "codexToml" | "antigravity";
   lang: "json" | "bash" | "toml";
@@ -38,6 +47,7 @@ export function mcpSnippets(cmd: McpCommand, project?: string | null): McpSnippe
     "[mcp_servers.opendgus]",
     `command = ${tomlString(cmd.command)}`,
     ...(cmd.args.length ? [`args = [${cmd.args.map(tomlString).join(", ")}]`] : []),
+    "startup_timeout_sec = 30",
     ...(project ? [`env = { OPENDGUS_PROJECT = ${tomlString(project)} }`] : []),
   ].join("\n");
 

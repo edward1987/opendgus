@@ -187,7 +187,7 @@ export const useStore = create<State>((set, get) => {
           }
           if (cfg.smokeAiDemo !== null && cfg.smokeAiDemo !== undefined) set({ rightTab: "ai" });
           if (cfg.smokeRun !== null && cfg.smokeRun !== undefined) set({ mode: "run" });
-          if (cfg.smokeDialog === "mcp") set({ dialog: "mcp", rightTab: "ai" });
+          if (cfg.smokeDialog?.startsWith("mcp")) set({ dialog: "mcp", rightTab: "ai" });
           else if (cfg.smokeDialog) set({ dialog: cfg.smokeDialog as DialogName });
         }
       } catch (e) {

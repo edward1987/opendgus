@@ -602,6 +602,8 @@ textarea { resize: vertical; }
 .mcp-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
 .mcp-check .mono { word-break: break-all; }
 .mcp-dialog p { margin: 0; }
+.mcp-setup { display: flex; flex-direction: column; gap: 6px; padding-bottom: 6px; border-bottom: 1px solid var(--border); }
+.mcp-setup .mono { word-break: break-all; opacity: 0.85; }
 .ai-empty .mcp-link { display: inline-flex; align-items: center; gap: 6px; }
 
 /* searchable dropdown (SearchSelect) */

@@ -1,6 +1,6 @@
 // HTTP/WebSocket client for the Python backend (src/opendgus/server.py).
 import type { AiProvider, ModelInfo, ProviderId } from "./aiSettings";
-import type { McpCommand } from "./mcpConfig";
+import type { McpAppStatus, McpCommand } from "./mcpConfig";
 import type { Catalog, Project } from "./types";
 
 export interface Bridge {
@@ -35,6 +35,10 @@ export interface Bridge {
   getSecret(name: string): Promise<string | null>;
   deleteSecret(name: string): Promise<void>;
   secretsEncrypted(): Promise<boolean>;
+  /** The MCP command for external AI apps (copied to a lasting folder first when OpenDGUS runs from a temporary
+   *  one, e.g. the portable .exe) and whether Codex has it registered. */
+  mcpPrepare(): Promise<{ mcp: McpCommand | null; codex: McpAppStatus | null; error: string | null }>;
+  mcpCodex(action: "install" | "remove", project: string | null): Promise<McpAppStatus>;
 }
 
 declare global {
@@ -89,6 +93,10 @@ function browserBridge(): Bridge {
     getSecret: async (name) => secrets.get(name) ?? null,
     deleteSecret: async (name) => void secrets.delete(name),
     secretsEncrypted: async () => false,
+    mcpPrepare: async () => ({ mcp: null, codex: null, error: null }),
+    mcpCodex: async () => {
+      throw new Error("not available in the browser");
+    },
   };
 }
 
