@@ -85,7 +85,8 @@ def cart_panel(els, ctrls, f: Frame, box, horizontal: bool):
         return
     ts = min(S(20), h // 14)
     els += [Icon(name="shopping-cart", x=x + pad, y=y + pad, w=S(30), h=S(30), color="primary"),
-            label(x + pad + S(42), y + pad + S(2), w, ts + 6, "Your order", ts, color="text", weight="semibold")]
+            label(x + pad + S(42), y + pad + S(2), w - 2 * pad - S(42), ts + 6, "Your order", ts, color="text",
+                  weight="semibold")]
     y2 = y + pad + S(50)
     els.append(Line(points=[x + pad, y2, x + w - pad, y2], color="surface2", width=max(1, S(2))))
     rh = S(44)

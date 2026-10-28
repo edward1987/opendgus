@@ -111,7 +111,8 @@ def monitor_page(f: Frame):
     half = (w - sl) // 2
     nh = min(fit_h(half, h, 3, 0, "semibold"), h)
     ctrls.append(number(x, y + (h - nh) // 2, half, nh, "bp_sys", 3, weight="semibold", color=C_BP))
-    els.append(Text(text="/", x=x + half, y=y + (h - nh) // 2, w=sl, h=nh, size=round(nh * 0.9), color="muted",
+    els.append(Text(text="/", x=x + half - S(4), y=y + (h - nh) // 2, w=sl + S(8), h=nh, size=round(nh * 0.9),
+                    color="muted",
                     align="center"))
     ctrls.append(number(x + half + sl, y + (h - nh) // 2, half, nh, "bp_dia", 3, weight="semibold", color=C_BP,
                         align="left"))

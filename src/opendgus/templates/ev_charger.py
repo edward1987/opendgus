@@ -146,7 +146,7 @@ def build(width: int = 1024, height: int = 600) -> Project:
                 dw = num_w(nh, 2, weight="semibold")
             top = y + (h - cs - S(12) - nh) // 2
             els.append(Icon(name=ic, x=x + S(20), y=top, w=cs + S(4), h=cs + S(4), color=col))
-            els.append(label(x + S(20) + cs + S(12), top, w, cs + S(4), txt, fit_text(txt, w // 2, cs),
+            els.append(label(x + S(20) + cs + S(12), top, w - S(52) - cs, cs + S(4), txt, fit_text(txt, w // 2, cs),
                              valign="middle"))
             ny = top + cs + S(12)
             ctrls.append(number(x + S(20), ny, dw, nh, "time_h", 2, "", "semibold", leading_zeros=True))

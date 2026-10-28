@@ -52,10 +52,11 @@ def switch_row(els, ctrls, f: Frame, box, v, title, sub="", icon=None, on_color=
     sw_h = min(S(44), h * 60 // 100)
     sw_w = sw_h * 2
     ts, ss = min(S(22), h * 30 // 100), min(S(16), h * 22 // 100)
-    show_sub = sub and ss >= 10
+    tw = x + w - pad - sw_w - S(12) - tx
+    from ..render.fonts import load_font
+    show_sub = sub and ss >= 10 and load_font(None, ss).getlength(sub) <= tw
     tot = ts + (ss + S(6) if show_sub else 0)
     ty = y + (h - tot) // 2 - (0 if show_sub else S(3))
-    tw = x + w - pad - sw_w - S(12) - tx
     els.append(label(tx, ty, tw, ts + 6, title, ts, color="text", weight="semibold"))
     if show_sub:
         els.append(label(tx, ty + ts + S(6), tw, ss + 6, sub, ss))

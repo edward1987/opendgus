@@ -22,7 +22,7 @@ from .formats import icl as ICL
 from .formats import spec as S
 from .formats import specs as _specs  # noqa: F401  (registers specs)
 from .formats.cfg import CfgOptions, build_cfg
-from .model import Control, Page, Project, Variable
+from .model import Control, Page, Project, Text, Variable
 from .profiles import JPEG_LIMIT
 from .render.fonts import load_font
 from .render.page import PageRenderer, rgb
@@ -230,6 +230,30 @@ def _vars_header(project: Project, vps: dict[str, int]) -> str:
     return "\n".join(lines + [""] + pages) + "\n"
 
 
+
+def check_elements(project: Project, page: Page, folder: Optional[Path], issues: list) -> None:
+    """Warn about static elements that leave the screen or text that does not fit its box."""
+    W, H = project.display.width, project.display.height
+    base = str(folder) if folder else None
+    for el in page.elements:
+        if not getattr(el, "visible", True) or not hasattr(el, "w"):
+            continue
+        if el.x < 0 or el.y < 0 or el.x + el.w > W or el.y + el.h > H:
+            issues.append(Issue("warning", el.id, f"{el.type} ({el.x},{el.y} {el.w}x{el.h}) goes outside the "
+                                                  f"{W}x{H} screen"))
+        if isinstance(el, Text) and el.text:
+            f = load_font(el.font or project.theme.font, el.size, el.weight, base)
+            asc, desc = f.getmetrics()
+            lines = el.text.split("\n")
+            need_w = max(f.getlength(line) for line in lines)
+            ink = [f.getbbox(line) for line in lines if line.strip()] or [(0, 0, 0, 0)]
+            ink_h = max(b[3] for b in ink) - min(b[1] for b in ink)          # real glyph height, not line box
+            need_h = round((asc + desc) * 1.15) * (len(lines) - 1) + ink_h
+            if need_w > el.w + 2 or need_h > el.h + max(4, el.size // 4):
+                short = el.text if len(el.text) <= 24 else el.text[:22] + "..."
+                issues.append(Issue("warning", el.id, f"text \"{short}\" needs {int(need_w)}x{need_h} px but its box "
+                                                      f"is {el.w}x{el.h}; widen it or use a smaller size"))
+
 # ------------------------------------------------------------------ fast single-page preview (editor)
 
 def render_preview(project: Project, folder: Optional[Path], page_id: int,
@@ -341,6 +365,7 @@ def compile_project(project: Project, folder: Optional[Path] = None, out_dir: Op
         ctx.page = page
         ctx.base = ctx.r.render(page)
         ctx.drawn = ctx.base.convert("RGBA")
+        check_elements(project, page, folder, res.issues)
         page_controls = [c for c in page.controls if c.visible]
         for c in page_controls:
             if c.x < 0 or c.y < 0 or c.x + c.w > W or c.y + c.h > H:

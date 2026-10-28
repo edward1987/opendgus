@@ -146,3 +146,17 @@ def test_needle_widget_compiles_to_icon_rotation(tmp_path):
     assert r.ok, [str(i) for i in r.issues]
     key, v = S.decode(C.parse_14((tmp_path / "build" / "DWIN_SET" / "14.bin").read_bytes())[0][0])
     assert key == "icon_rotation" and v["xc"] == 220 and v["yc"] == 220 and v["al_end"] - v["al_begin"] == 540
+
+
+def test_text_overflow_and_offscreen_elements_are_reported(tmp_path):
+    from opendgus.model import Rect, Text
+    p = Project(display=Display.custom(800, 480))
+    p.pages[0].elements += [
+        Text(text="This sentence is far too long for its box", x=10, y=10, w=120, h=30, size=20),
+        Rect(x=700, y=400, w=200, h=100),
+        Text(text="12:30", x=10, y=100, w=200, h=60, size=40),          # fits: no warning
+    ]
+    msgs = [str(i) for i in compile_project(p, tmp_path, write=False).issues]
+    assert any("far too long" in m and "widen it" in m for m in msgs)
+    assert any("outside the 800x480 screen" in m for m in msgs)
+    assert not any("12:30" in m for m in msgs)

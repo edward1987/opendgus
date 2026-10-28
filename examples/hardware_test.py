@@ -29,7 +29,7 @@ def build(W: int = 1024, H: int = 600) -> Project:
         Variable(name="raw", init=1234, doc="shown with the 0# font"),
     ])
     hdr = lambda t: [Rect(x=0, y=0, w=W, h=S(64), fill="surface", radius=0),
-                     Text(text=t, x=S(24), y=0, w=W, h=S(64), size=S(28), weight="bold", valign="middle")]
+                     Text(text=t, x=S(24), y=0, w=W - S(240), h=S(64), size=S(28), weight="bold", valign="middle")]
     nav = lambda target, label: Control(type="button", x=W - S(200), y=S(8), w=S(180), h=S(48),
                                         props={"label": label, "action": {"type": "page", "page": target}})
     note = lambda t, y: Text(text=t, x=S(24), y=y, w=W - S(48), h=S(26), size=S(16), color="muted")
