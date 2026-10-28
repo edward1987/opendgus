@@ -44,6 +44,10 @@ The renderer can also run in a normal browser for UI work: start a backend by ha
 electron . --smoke-screenshot out.png --project C:/path/to/project [--select c5] [--lang ro]
 ```
 
+Extra smoke flags: `--smoke-ai-demo [settings]` shows a canned AI transcript in the AI tab (no network; `settings`
+also opens the provider settings), and `--smoke-run "x,y[,holdMs];x,y"` opens Run mode and plays those taps (device
+pixels) before the capture.
+
 This opens the project, waits until the editor has drawn the page preview, saves `capturePage()` to the PNG and exits.
 The exit code is 0, or 2 if it gave up waiting after 45 s. Smoke runs use a separate temporary user profile.
 
@@ -64,6 +68,17 @@ The exit code is 0, or 2 if it gave up waiting after 45 s. Smoke runs use a sepa
     edit can be undone. The selection is kept for ids that still exist.
   * with local edits pending, the local save is sent: **last write wins**, and the local edits overwrite the external
     change.
+
+## AI designer and Run mode
+
+* **AI tab:** chats with the backend agent over `WS /ws/ai` (streamed text, thinking, tool-call chips, renders). The
+  agent edits `project.json`, and the canvas live-reloads. Provider, model, base URL and effort are kept in
+  `settings.json` in the Electron userData folder. API keys are encrypted with Electron `safeStorage` in the main
+  process (`secrets.json`). They are never written in clear text. If the OS has no encryption, they are kept for
+  the session only.
+* **Run:** the toolbar button builds the project and opens the emulator (`emulator_*` tools). A click is a tap, and
+  a press of 350 ms or longer is a long press (`hold_ms`). In the side table you can write variables as the MCU
+  would. Esc goes back to editing.
 
 ## Keyboard
 

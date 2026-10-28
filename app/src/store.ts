@@ -8,6 +8,7 @@ import type { Catalog, Project } from "./lib/types";
 import i18n from "./i18n";
 
 export type RightTab = "props" | "insert" | "vars" | "ai";
+export type Mode = "edit" | "run";
 export type DialogName = null | "validate" | "build" | "device" | "theme" | "display";
 
 export interface Toast {
@@ -28,6 +29,10 @@ interface State {
   booting: boolean;
   backendError: string | null;
   smoke: boolean;
+  /** smoke runs that must finish their own scene (AI demo, Run taps) before the screenshot */
+  smokeAiDemo: string | null;
+  smokeRun: string | null;
+  mode: Mode;
   catalog: Catalog | null;
   folder: string | null;
   project: Project | null;
@@ -48,7 +53,7 @@ interface State {
 
   boot(): Promise<void>;
   openProject(folder: string): Promise<void>;
-  createProject(args: Record<string, unknown>): Promise<void>;
+  createProject(args: Record<string, unknown>, displayPatch?: Record<string, unknown>): Promise<void>;
   closeProject(): Promise<void>;
   commit(next: Project, coalesce?: string | null): void;
   undo(): void;
@@ -63,7 +68,8 @@ interface State {
   setZoom(z: number | null): void;
   setViewCenter(c: { x: number; y: number }): void;
   setVpMap(m: Record<string, string> | null): void;
-  markRendered(): void;
+  markRendered(force?: boolean): void;
+  setMode(m: Mode): void;
 }
 
 let saveTimer: ReturnType<typeof setTimeout> | undefined;
@@ -124,7 +130,7 @@ export const useStore = create<State>((set, get) => {
     const { api } = get();
     unwatch?.();
     unwatch = api!.watch(() => void onRemoteChange(), (m) => set({ live: m }));
-    set({ history: createHistory(), selection: [], pageId: project.pages[0]?.id ?? 0, zoom: null, vpMap: null, rightTab: "props", rendered: false });
+    set({ history: createHistory(), selection: [], pageId: project.pages[0]?.id ?? 0, zoom: null, vpMap: null, rightTab: "props", rendered: false, mode: "edit" });
     adopt(folder, project);
     void bridge.recentAdd(folder, project.name);
     get().refreshPreview(true);
@@ -135,6 +141,9 @@ export const useStore = create<State>((set, get) => {
     booting: true,
     backendError: null,
     smoke: false,
+    smokeAiDemo: null,
+    smokeRun: null,
+    mode: "edit",
     catalog: null,
     folder: null,
     project: null,
@@ -161,7 +170,7 @@ export const useStore = create<State>((set, get) => {
       }
       if (cfg.lang) void i18n.changeLanguage(cfg.lang);
       const api = new Api(cfg.port, cfg.token);
-      set({ api, smoke: cfg.smoke });
+      set({ api, smoke: cfg.smoke, smokeAiDemo: cfg.smokeAiDemo ?? null, smokeRun: cfg.smokeRun ?? null });
       try {
         const [catalog, health] = await Promise.all([api.catalog(), api.health()]);
         set({ catalog });
@@ -174,6 +183,8 @@ export const useStore = create<State>((set, get) => {
             get().setPage(f.page.id);
             set({ selection: sel });
           }
+          if (cfg.smokeAiDemo !== null && cfg.smokeAiDemo !== undefined) set({ rightTab: "ai" });
+          if (cfg.smokeRun !== null && cfg.smokeRun !== undefined) set({ mode: "run" });
         }
       } catch (e) {
         set({ backendError: errText(e) });
@@ -190,12 +201,17 @@ export const useStore = create<State>((set, get) => {
       await startEditor(r.folder, r.project);
     },
 
-    async createProject(args) {
+    async createProject(args, displayPatch) {
       const { api } = get();
       if (!api) return;
       await get().flushSave();
       await api.tool("create_project", args);
-      const r = await api.getProject();
+      let r = await api.getProject();
+      if (displayPatch) {
+        // e.g. a catalog display used in portrait: keep its profile (flash, CPU) with width/height swapped
+        const p = { ...r.project, display: { ...r.project.display, ...displayPatch } };
+        r = { folder: r.folder, project: (await api.putProject(p)).project };
+      }
       await startEditor(r.folder, r.project);
     },
 
@@ -315,6 +331,7 @@ export const useStore = create<State>((set, get) => {
     },
 
     setRightTab: (t) => set({ rightTab: t }),
+    setMode: (m) => set({ mode: m, selection: m === "run" ? [] : get().selection }),
     setDialog: (d) => set({ dialog: d }),
     toast(text, kind = "info") {
       const id = ++toastSeq;
@@ -324,8 +341,10 @@ export const useStore = create<State>((set, get) => {
     setZoom: (z) => set({ zoom: z }),
     setViewCenter: (c) => set({ viewCenter: c }),
     setVpMap: (m) => set({ vpMap: m }),
-    markRendered() {
+    markRendered(force = false) {
       if (get().rendered) return;
+      // AI-demo / Run smoke scenes signal readiness themselves once their content is on screen
+      if (!force && (get().smokeAiDemo !== null || get().smokeRun !== null)) return;
       set({ rendered: true });
       bridge.signalRendered();
     },

@@ -1,4 +1,5 @@
 // HTTP/WebSocket client for the Python backend (src/opendgus/server.py).
+import type { AiProvider } from "./aiSettings";
 import type { Catalog, Project } from "./types";
 
 export interface Bridge {
@@ -10,6 +11,8 @@ export interface Bridge {
     smoke: boolean;
     select?: string[];
     lang?: string | null;
+    smokeAiDemo?: string | null;
+    smokeRun?: string | null;
     version: string;
     platform: string;
   }>;
@@ -22,6 +25,12 @@ export interface Bridge {
   openPath(p: string): Promise<string>;
   defaultProjectsDir(): Promise<string>;
   signalRendered(): void;
+  settingsGet(key: string): Promise<unknown>;
+  settingsSet(key: string, value: unknown): Promise<boolean>;
+  setSecret(name: string, value: string): Promise<{ ok: boolean; persisted: boolean }>;
+  getSecret(name: string): Promise<string | null>;
+  deleteSecret(name: string): Promise<void>;
+  secretsEncrypted(): Promise<boolean>;
 }
 
 declare global {
@@ -30,9 +39,11 @@ declare global {
   }
 }
 
-/** Browser fallback (plain `vite` without Electron): talk to a backend given by ?port=&token= in the URL. */
+/** Browser fallback (plain `vite` without Electron): talk to a backend given by ?port=&token= in the URL.
+ *  Settings go to localStorage; secrets stay in memory only (no safe place to keep them in a browser). */
 function browserBridge(): Bridge {
   const q = new URLSearchParams(location.search);
+  const secrets = new Map<string, string>();
   return {
     getConfig: async () => ({
       port: q.get("port") ? Number(q.get("port")) : null,
@@ -52,6 +63,28 @@ function browserBridge(): Bridge {
     openPath: async () => "",
     defaultProjectsDir: async () => "",
     signalRendered: () => undefined,
+    settingsGet: async (key) => {
+      try {
+        return JSON.parse(localStorage.getItem(`opendgus.${key}`) ?? "null");
+      } catch {
+        return null;
+      }
+    },
+    settingsSet: async (key, value) => {
+      try {
+        localStorage.setItem(`opendgus.${key}`, JSON.stringify(value));
+        return true;
+      } catch {
+        return false;
+      }
+    },
+    setSecret: async (name, value) => {
+      secrets.set(name, value);
+      return { ok: true, persisted: false };
+    },
+    getSecret: async (name) => secrets.get(name) ?? null,
+    deleteSecret: async (name) => void secrets.delete(name),
+    secretsEncrypted: async () => false,
   };
 }
 
@@ -109,6 +142,27 @@ export class Api {
       issues = [];
     }
     return { url: URL.createObjectURL(await r.blob()), issues };
+  }
+
+  /** URL of an icon glyph PNG (usable as <img src>; the token goes in the query). */
+  iconUrl(name: string, size = 32, color = "#E2E8F0") {
+    const q = new URLSearchParams({ size: String(size), color, token: this.token });
+    return `${this.base}/api/icon/${encodeURIComponent(name)}.png?${q}`;
+  }
+
+  /** URL of a template thumbnail rendered at the given display size. */
+  templateUrl(id: string, width: number, height: number, scale: number, page = 0) {
+    const q = new URLSearchParams({ width: String(width), height: String(height), page: String(page), scale: scale.toFixed(3), token: this.token });
+    return `${this.base}/api/template/${encodeURIComponent(id)}.png?${q}`;
+  }
+
+  aiProviders() {
+    return this.req<AiProvider[]>("/api/ai/providers");
+  }
+
+  /** WebSocket for the AI designer (one per chat panel). */
+  aiSocket() {
+    return new WebSocket(`ws://127.0.0.1:${this.port}/ws/ai?token=${encodeURIComponent(this.token)}`);
   }
 
   /** Live updates over /ws; reconnects automatically. If the backend has no WebSocket support (uvicorn without

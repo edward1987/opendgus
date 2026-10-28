@@ -3,7 +3,7 @@ import react from "@vitejs/plugin-react";
 
 // Strict CSP for the packaged renderer only (the dev server needs inline scripts for React Fast Refresh).
 const CSP =
-  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data:; " +
+  "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' blob: data: http://127.0.0.1:*; " +
   "connect-src 'self' http://127.0.0.1:* ws://127.0.0.1:*; font-src 'self' data:";
 
 export default defineConfig({

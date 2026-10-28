@@ -1,5 +1,5 @@
 // OpenDGUS Electron main process: starts the Python backend, owns native dialogs and the recent-projects list.
-import { app, BrowserWindow, dialog, ipcMain, Menu, session, shell } from "electron";
+import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell } from "electron";
 import * as fs from "fs";
 import * as path from "path";
 import { Backend, BackendInfo, findBackendRoot } from "./backend";
@@ -9,6 +9,8 @@ interface Cli {
   project?: string;
   select?: string; // smoke: comma-separated item ids to select
   lang?: string; // smoke: UI language
+  smokeAiDemo?: string; // smoke: show a canned AI transcript (no network); "settings" also opens the settings
+  smokeRun?: string; // smoke: open Run mode and tap "x,y[,holdMs];x,y..." (device px) before the capture
 }
 
 function parseCli(argv: string[]): Cli {
@@ -21,6 +23,8 @@ function parseCli(argv: string[]): Cli {
     else if (a.startsWith("--project=")) out.project = a.split("=", 2)[1];
     else if (a === "--select") out.select = argv[++i];
     else if (a === "--lang") out.lang = argv[++i];
+    else if (a === "--smoke-ai-demo") out.smokeAiDemo = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i] : "";
+    else if (a === "--smoke-run") out.smokeRun = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i] : "";
   }
   if (out.smokeOut) out.smokeOut = path.resolve(out.smokeOut);
   if (out.project) out.project = path.resolve(out.project);
@@ -60,6 +64,69 @@ function writeRecent(list: Recent[]) {
     fs.writeFileSync(recentFile(), JSON.stringify(list.slice(0, 12), null, 2));
   } catch {
     /* non-fatal */
+  }
+}
+
+// ------------------------------------------------------------------ settings & secrets
+
+// Plain UI settings (no secrets) live in settings.json. Secrets (AI API keys) are encrypted with the OS keychain via
+// safeStorage and stored as base64 in secrets.json; they are never written in clear text and never logged. When
+// the OS offers no encryption, secrets are kept in memory for this run only.
+const settingsFile = () => path.join(app.getPath("userData"), "settings.json");
+const secretsFile = () => path.join(app.getPath("userData"), "secrets.json");
+const KEY_RE = /^[A-Za-z0-9._-]{1,64}$/;
+const memorySecrets = new Map<string, string>();
+
+function readJson(file: string): Record<string, unknown> {
+  try {
+    const v = JSON.parse(fs.readFileSync(file, "utf-8"));
+    return v && typeof v === "object" && !Array.isArray(v) ? v : {};
+  } catch {
+    return {};
+  }
+}
+
+function writeJson(file: string, data: Record<string, unknown>) {
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  const tmp = file + ".tmp";
+  fs.writeFileSync(tmp, JSON.stringify(data, null, 2));
+  fs.renameSync(tmp, file);
+}
+
+function setSecret(name: string, value: string): { ok: boolean; persisted: boolean } {
+  if (!KEY_RE.test(name) || typeof value !== "string") return { ok: false, persisted: false };
+  const all = readJson(secretsFile());
+  if (!safeStorage.isEncryptionAvailable()) {
+    memorySecrets.set(name, value);
+    delete all[name];
+    writeJson(secretsFile(), all);
+    return { ok: true, persisted: false };
+  }
+  all[name] = safeStorage.encryptString(value).toString("base64");
+  writeJson(secretsFile(), all);
+  memorySecrets.delete(name);
+  return { ok: true, persisted: true };
+}
+
+function getSecret(name: string): string | null {
+  if (!KEY_RE.test(name)) return null;
+  if (memorySecrets.has(name)) return memorySecrets.get(name)!;
+  const enc = readJson(secretsFile())[name];
+  if (typeof enc !== "string" || !safeStorage.isEncryptionAvailable()) return null;
+  try {
+    return safeStorage.decryptString(Buffer.from(enc, "base64"));
+  } catch {
+    return null; // e.g. profile copied from another machine/user
+  }
+}
+
+function deleteSecret(name: string) {
+  if (!KEY_RE.test(name)) return;
+  memorySecrets.delete(name);
+  const all = readJson(secretsFile());
+  if (name in all) {
+    delete all[name];
+    writeJson(secretsFile(), all);
   }
 }
 
@@ -142,6 +209,8 @@ function registerIpc() {
     smoke: !!cli.smokeOut,
     select: cli.select ? cli.select.split(",").filter(Boolean) : [],
     lang: cli.lang ?? null,
+    smokeAiDemo: cli.smokeOut && cli.smokeAiDemo !== undefined ? cli.smokeAiDemo : null,
+    smokeRun: cli.smokeOut && cli.smokeRun !== undefined ? cli.smokeRun : null,
     version: app.getVersion(),
     platform: process.platform,
   }));
@@ -180,6 +249,34 @@ function registerIpc() {
   });
   ipcMain.handle("shell:openPath", (_e, p: string) => shell.openPath(p));
   ipcMain.handle("app:defaultProjectsDir", () => path.join(app.getPath("documents"), "OpenDGUS"));
+  ipcMain.handle("settings:get", (_e, key: string) => (KEY_RE.test(key) ? readJson(settingsFile())[key] ?? null : null));
+  ipcMain.handle("settings:set", (_e, key: string, value: unknown) => {
+    if (!KEY_RE.test(key)) return false;
+    const all = readJson(settingsFile());
+    all[key] = value;
+    try {
+      writeJson(settingsFile(), all);
+      return true;
+    } catch {
+      return false;
+    }
+  });
+  ipcMain.handle("secret:set", (_e, name: string, value: string) => {
+    try {
+      return setSecret(name, value);
+    } catch {
+      return { ok: false, persisted: false };
+    }
+  });
+  ipcMain.handle("secret:get", (_e, name: string) => getSecret(name));
+  ipcMain.handle("secret:delete", (_e, name: string) => {
+    try {
+      deleteSecret(name);
+    } catch {
+      /* non-fatal */
+    }
+  });
+  ipcMain.handle("secret:available", () => safeStorage.isEncryptionAvailable());
   ipcMain.on("app:rendered", () => {
     if (cli.smokeOut) void smokeCapture("ready");
   });

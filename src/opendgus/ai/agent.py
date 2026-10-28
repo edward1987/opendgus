@@ -16,6 +16,7 @@ from __future__ import annotations
 import base64
 import inspect
 import json
+import threading
 import typing
 from dataclasses import dataclass, field
 from pathlib import Path
@@ -104,11 +105,22 @@ def project_context() -> str:
         return f"(no project open: {e})"
 
 
+class Cancelled(Exception):
+    pass
+
+
 @dataclass
 class ChatSession:
-    """Conversation state for one chat panel. History is provider-specific and append-only."""
+    """Conversation state for one chat panel. History is provider-specific and append-only.
+    `cancel` stops a running turn at the next event/tool boundary; `lock` prevents overlapping turns."""
     provider: str = "anthropic"
     history: list = field(default_factory=list)
+    cancel: threading.Event = field(default_factory=threading.Event)
+    lock: threading.Lock = field(default_factory=threading.Lock)
+
+    def check(self) -> None:
+        if self.cancel.is_set():
+            raise Cancelled()
 
 
 def b64(png: bytes) -> str:

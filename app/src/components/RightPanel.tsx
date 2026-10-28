@@ -1,5 +1,6 @@
 import { useTranslation } from "react-i18next";
 import { RightTab, useStore } from "../store";
+import { AiPanel } from "./AiPanel";
 import { Icon, IconName } from "./Icons";
 import { InsertPanel } from "./InsertPanel";
 import { PropertiesPanel } from "./PropertiesPanel";
@@ -17,7 +18,7 @@ export function RightPanel() {
   const tab = useStore((s) => s.rightTab);
   const setTab = useStore((s) => s.setRightTab);
   return (
-    <aside className="panel right-panel">
+    <aside className={`panel right-panel ${tab === "ai" ? "wide" : ""}`}>
       <nav className="tabs">
         {TABS.map((x) => (
           <button key={x.id} className={`tab ${tab === x.id ? "on" : ""}`} onClick={() => setTab(x.id)}>
@@ -25,7 +26,7 @@ export function RightPanel() {
           </button>
         ))}
       </nav>
-      <div className="tab-body">
+      <div className={`tab-body ${tab === "ai" ? "flush" : ""}`}>
         {tab === "props" && <PropertiesPanel />}
         {tab === "insert" && <InsertPanel />}
         {tab === "vars" && <VariablesPanel />}
@@ -35,16 +36,3 @@ export function RightPanel() {
   );
 }
 
-function AiPanel() {
-  const { t } = useTranslation();
-  return (
-    <div className="ai-panel">
-      <div className="ai-art"><Icon name="sparkles" size={34} /></div>
-      <h3>{t("ai.title")}</h3>
-      <p className="muted">{t("ai.text")}</p>
-      <textarea disabled placeholder={t("ai.placeholder")} rows={4} />
-      <button className="btn primary" disabled>{t("ai.send")}</button>
-      <p className="muted small">{t("ai.mcpHint")}</p>
-    </div>
-  );
-}

@@ -3,13 +3,18 @@ from __future__ import annotations
 
 from typing import Optional
 
-from .agent import ChatSession, Emit
+from .agent import Cancelled, ChatSession, Emit
 
 
 def run(session: ChatSession, user_text: str, emit: Emit, *, provider: str = "anthropic",
         api_key: Optional[str] = None, model: Optional[str] = None, base_url: Optional[str] = None,
         effort: str = "medium") -> None:
     """Run one user turn with the selected provider, streaming events through `emit`."""
+    if not session.lock.acquire(blocking=False):
+        emit({"type": "error", "message": "a reply is still running; stop it first"})
+        emit({"type": "done", "stop_reason": "busy"})
+        return
+    session.cancel.clear()
     if session.provider != provider:          # histories are provider-specific
         session.provider, session.history = provider, []
     try:
@@ -25,9 +30,27 @@ def run(session: ChatSession, user_text: str, emit: Emit, *, provider: str = "an
             P.ollama_chat(session, user_text, emit, model=model or "qwen2.5:14b", base_url=base_url)
         else:
             emit({"type": "error", "message": f"unknown provider {provider!r}"})
+    except Cancelled:
+        # keep the history valid: drop a trailing assistant turn whose tool calls were not answered
+        h = session.history
+        while h and _unanswered(h[-1]):
+            h.pop()
+        emit({"type": "done", "stop_reason": "cancelled"})
     except Exception as e:  # never kill the server thread; report to the chat panel
         emit({"type": "error", "message": f"{type(e).__name__}: {e}"})
         emit({"type": "done", "stop_reason": "error"})
+    finally:
+        session.lock.release()
+
+
+def _unanswered(msg) -> bool:
+    if not isinstance(msg, dict) or msg.get("role") != "assistant":
+        return False
+    if msg.get("tool_calls"):
+        return True
+    content = msg.get("content")
+    return isinstance(content, list) and any(getattr(b, "type", None) == "tool_use" or
+                                             (isinstance(b, dict) and b.get("type") == "tool_use") for b in content)
 
 
 PROVIDERS = [

@@ -32,6 +32,7 @@ def chat(session: ChatSession, user_text: str, emit: Emit, *, api_key: Optional[
             stream = client.chat.completions.create(model=model, messages=msgs, tools=tools, stream=True)
             finish = None
             for chunk in stream:
+                session.check()
                 if not chunk.choices:
                     continue
                 ch = chunk.choices[0]
@@ -68,6 +69,7 @@ def chat(session: ChatSession, user_text: str, emit: Emit, *, api_key: Optional[
 
         images = []
         for tc in assistant["tool_calls"]:
+            session.check()
             name, raw = tc["function"]["name"], tc["function"]["arguments"]
             try:
                 args = json.loads(raw)

@@ -12,6 +12,13 @@ const api = {
   openPath: (p: string) => ipcRenderer.invoke("shell:openPath", p),
   defaultProjectsDir: () => ipcRenderer.invoke("app:defaultProjectsDir"),
   signalRendered: () => ipcRenderer.send("app:rendered"),
+  settingsGet: (key: string) => ipcRenderer.invoke("settings:get", key),
+  settingsSet: (key: string, value: unknown) => ipcRenderer.invoke("settings:set", key, value),
+  // API keys: encrypted in the main process with safeStorage; the renderer only ever holds them in memory.
+  setSecret: (name: string, value: string) => ipcRenderer.invoke("secret:set", name, value),
+  getSecret: (name: string) => ipcRenderer.invoke("secret:get", name),
+  deleteSecret: (name: string) => ipcRenderer.invoke("secret:delete", name),
+  secretsEncrypted: () => ipcRenderer.invoke("secret:available"),
 };
 
 contextBridge.exposeInMainWorld("opendgus", api);

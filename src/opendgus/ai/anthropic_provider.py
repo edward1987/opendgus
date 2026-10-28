@@ -36,6 +36,7 @@ def chat(session: ChatSession, user_text: str, emit: Emit, *, api_key: Optional[
                 betas=[FALLBACK_BETA], fallbacks="default",
             ) as stream:
                 for event in stream:
+                    session.check()
                     if event.type == "content_block_delta":
                         if event.delta.type == "text_delta":
                             emit({"type": "text", "delta": event.delta.text})
@@ -84,6 +85,7 @@ def chat(session: ChatSession, user_text: str, emit: Emit, *, api_key: Optional[
 
         results = []
         for b in tool_uses:
+            session.check()
             emit({"type": "tool_call", "id": b.id, "name": b.name, "input": b.input})
             td = tds.get(b.name)
             if td is None:

@@ -188,3 +188,32 @@ def test_anthropic_refusal_is_reported(tmp_path, monkeypatch):
     ai.run(ChatSession(), "x", events.append, provider="anthropic", api_key="k")
     assert events[-1] == {"type": "done", "stop_reason": "refusal"}
     assert any(e["type"] == "error" for e in events)
+
+
+def test_stop_cancels_a_running_turn(tmp_path, monkeypatch):
+    """A stop request ends the turn at the next boundary; no further tools run and the session is reusable."""
+    import threading, time
+    _project(tmp_path)
+    gate = threading.Event()
+
+    def slow_chunks():
+        yield _chunk("Working")
+        gate.wait(5)                                   # the test sends stop while we're here
+        yield _chunk(tool=(0, "c1", "add_page", '{"name": "Should not exist"}'))
+        yield _chunk(finish="tool_calls")
+
+    monkeypatch.setattr(openai, "OpenAI", FakeOpenAI)
+    FakeOpenAI.script = [slow_chunks()]
+    c = TestClient(create_app("t"), headers={"X-OpenDGUS-Token": "t"})
+    with c.websocket_connect("/ws/ai?token=t") as ws:
+        ws.send_json({"type": "chat", "session": "s", "text": "go", "provider": "openai", "api_key": "k"})
+        assert ws.receive_json()["type"] == "text"
+        ws.send_json({"type": "stop", "session": "s"})
+        time.sleep(0.2)
+        gate.set()
+        while True:
+            ev = ws.receive_json()
+            if ev["type"] == "done":
+                break
+        assert ev["stop_reason"] == "cancelled"
+    assert all(pg["name"] != "Should not exist" for pg in T.get_project()["pages"])

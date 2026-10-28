@@ -50,3 +50,11 @@ def test_rejects_unknown_fields_and_bad_values():
 def test_schema_available_for_ai():
     s = Project.json_schema()
     assert "pages" in s["properties"] and "$defs" in s
+
+
+def test_get_project_always_lists_pages_and_variables(tmp_path):
+    from opendgus.tools import core as T
+    T.SESSION.folder = None
+    T.create_project(str(tmp_path / "fresh"))
+    d = T.get_project()
+    assert d["pages"][0]["id"] == 0 and d["variables"] == [] and d["display"]["width"] == 800

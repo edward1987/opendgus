@@ -6,6 +6,7 @@ import { CanvasView } from "./CanvasView";
 import { BuildDialog, DeviceDialog, ValidateDialog } from "./Dialogs";
 import { LeftPanel } from "./LeftPanel";
 import { RightPanel } from "./RightPanel";
+import { RunView } from "./RunView";
 import { ThemeDialog } from "./ThemeDialog";
 import { Toolbar } from "./Toolbar";
 
@@ -21,11 +22,17 @@ const isTyping = (t: EventTarget | null) => {
 export function Editor() {
   const dialog = useStore((s) => s.dialog);
   const setDialog = useStore((s) => s.setDialog);
+  const mode = useStore((s) => s.mode);
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       if (isTyping(e.target) || useStore.getState().dialog) return;
       const s = useStore.getState();
+      if (s.mode === "run") {
+        // Run mode: the design is read-only; Esc goes back to editing
+        if (e.key === "Escape") s.setMode("edit");
+        return;
+      }
       const ctrl = e.ctrlKey || e.metaKey;
       const key = e.key.toLowerCase();
       if (ctrl && key === "z" && !e.shiftKey) { e.preventDefault(); s.undo(); return; }
@@ -71,8 +78,7 @@ export function Editor() {
     <div className="editor">
       <Toolbar />
       <div className="editor-body">
-        <LeftPanel />
-        <CanvasView />
+        {mode === "run" ? <RunView /> : <><LeftPanel /><CanvasView /></>}
         <RightPanel />
       </div>
       <StatusBar />

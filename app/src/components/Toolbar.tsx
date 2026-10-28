@@ -10,6 +10,7 @@ export function Toolbar() {
   const project = useStore((s) => s.project)!;
   const history = useStore((s) => s.history);
   const zoom = useStore((s) => s.zoom);
+  const mode = useStore((s) => s.mode);
   const s = useStore.getState;
   const [editing, setEditing] = useState(false);
 
@@ -30,8 +31,14 @@ export function Toolbar() {
         <button className="icon-btn" title={`${t("toolbar.redo")} (Ctrl+Y)`} disabled={!canRedo(history)} onClick={() => s().redo()}><Icon name="redo" /></button>
       </div>
       <div className="tb-group">
-        <button className={`btn ghost sm ${zoom === null ? "on" : ""}`} title="Ctrl+0" onClick={() => s().setZoom(null)}><Icon name="fit" /> {t("toolbar.fit")}</button>
-        <button className={`btn ghost sm ${zoom === 1 ? "on" : ""}`} title="Ctrl+1" onClick={() => s().setZoom(1)}>100%</button>
+        <button className={`btn ghost sm ${zoom === null && mode === "edit" ? "on" : ""}`} disabled={mode === "run"} title="Ctrl+0" onClick={() => s().setZoom(null)}><Icon name="fit" /> {t("toolbar.fit")}</button>
+        <button className={`btn ghost sm ${zoom === 1 && mode === "edit" ? "on" : ""}`} disabled={mode === "run"} title="Ctrl+1" onClick={() => s().setZoom(1)}>100%</button>
+      </div>
+      <div className="tb-group">
+        <button className={`btn run-btn ${mode === "run" ? "on" : ""}`} title={mode === "run" ? `${t("toolbar.exitRun")} (Esc)` : t("toolbar.runHint")}
+          onClick={() => s().setMode(mode === "run" ? "edit" : "run")}>
+          <Icon name={mode === "run" ? "stop" : "play"} /> {mode === "run" ? t("toolbar.exitRun") : t("toolbar.run")}
+        </button>
       </div>
       <div className="spacer" />
       <div className="tb-group">

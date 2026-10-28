@@ -159,6 +159,9 @@ def get_project(page: Optional[int] = None) -> dict:
     """The current project as JSON (all pages, or only one page if `page` is given). Read this before editing."""
     p = SESSION.load()
     d = p.model_dump(mode="json", exclude_defaults=True)
+    full = p.model_dump(mode="json")
+    for key in ("name", "display", "theme", "variables", "pages"):   # top-level sections are always present
+        d.setdefault(key, full[key])
     if page is not None:
         d["pages"] = [pg for pg in d["pages"] if pg["id"] == page]
     return d

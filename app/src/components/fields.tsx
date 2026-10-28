@@ -128,7 +128,7 @@ export function IconField({ value, onChange, nullable }: { value: string | null 
   return (
     <div className="icon-field" ref={ref}>
       <button type="button" className="color-btn" onClick={() => setOpen(!open)}>
-        <Icon name="star" size={14} />
+        {value && api ? <img className="glyph sm" src={api.iconUrl(value, 32)} alt="" /> : <Icon name="star" size={14} />}
         <span className="color-name">{value || t("fields.none")}</span>
         <Icon name="search" size={12} />
       </button>
@@ -140,7 +140,10 @@ export function IconField({ value, onChange, nullable }: { value: string | null 
           </div>
           <div className="icon-hits">
             {hits.map((n) => (
-              <button key={n} type="button" className={`icon-hit ${n === value ? "on" : ""}`} onClick={() => { onChange(n); setOpen(false); }}>{n}</button>
+              <button key={n} type="button" title={n} className={`icon-hit ${n === value ? "on" : ""}`} onClick={() => { onChange(n); setOpen(false); }}>
+                {api && <img className="glyph" src={api.iconUrl(n, 48, n === value ? "#04121D" : "#E2E8F0")} alt="" loading="lazy" />}
+                <span>{n}</span>
+              </button>
             ))}
             {hits.length === 0 && <span className="muted small">{t("fields.noIcons")}</span>}
           </div>

@@ -191,43 +191,66 @@ def create_app(token: str = TOKEN) -> FastAPI:
 
     @app.websocket("/ws/ai")
     async def ws_ai(socket: WebSocket):
-        """Client sends {"type":"chat","session","text","provider","api_key","model","base_url","effort"} or
-        {"type":"reset","session"}; the server streams agent events back (see opendgus.ai.agent)."""
+        """Client sends {"type":"chat","session","text","provider","api_key","model","base_url","effort"},
+        {"type":"stop","session"} or {"type":"reset","session"}; the server streams agent events back
+        (see opendgus.ai.agent). Messages are read while a reply runs, so stop takes effect immediately."""
         if socket.query_params.get("token") != token:
             await socket.close(code=4401)
             return
         await socket.accept()
         loop = asyncio.get_running_loop()
+        send_lock = asyncio.Lock()
+        running: dict[str, asyncio.Task] = {}
+
+        async def send(ev):
+            async with send_lock:
+                await socket.send_json(ev)
+
+        async def run_turn(sid: str, session, msg: dict):
+            queue: asyncio.Queue = asyncio.Queue()
+
+            def emit(ev):
+                loop.call_soon_threadsafe(queue.put_nowait, {**ev, "session": sid})
+
+            def work():
+                AI.run(session, str(msg.get("text", "")), emit, provider=msg.get("provider", "anthropic"),
+                       api_key=msg.get("api_key"), model=msg.get("model"), base_url=msg.get("base_url"),
+                       effort=msg.get("effort", "medium"))
+                loop.call_soon_threadsafe(queue.put_nowait, None)
+
+            fut = loop.run_in_executor(None, work)
+            while True:
+                ev = await queue.get()
+                if ev is None:
+                    break
+                try:
+                    await send(ev)
+                except Exception:
+                    session.cancel.set()       # socket gone: stop the agent
+            await fut
+
         try:
             while True:
                 msg = await socket.receive_json()
                 sid = str(msg.get("session", "default"))
-                if msg.get("type") == "reset":
+                kind = msg.get("type")
+                if kind == "stop":
+                    if sid in sessions:
+                        sessions[sid].cancel.set()
+                    continue
+                if kind == "reset":
+                    if sid in sessions:
+                        sessions[sid].cancel.set()
                     sessions.pop(sid, None)
-                    await socket.send_json({"type": "reset", "session": sid})
+                    await send({"type": "reset", "session": sid})
                     continue
-                if msg.get("type") != "chat":
-                    continue
-                session = sessions.setdefault(sid, AI.ChatSession())
-                queue: asyncio.Queue = asyncio.Queue()
-
-                def emit(ev, _sid=sid):
-                    loop.call_soon_threadsafe(queue.put_nowait, {**ev, "session": _sid})
-
-                def work():
-                    AI.run(session, str(msg.get("text", "")), emit, provider=msg.get("provider", "anthropic"),
-                           api_key=msg.get("api_key"), model=msg.get("model"), base_url=msg.get("base_url"),
-                           effort=msg.get("effort", "medium"))
-                    loop.call_soon_threadsafe(queue.put_nowait, None)
-
-                task = loop.run_in_executor(None, work)
-                while True:
-                    ev = await queue.get()
-                    if ev is None:
-                        break
-                    await socket.send_json(ev)
-                await task
+                if kind == "chat":
+                    session = sessions.setdefault(sid, AI.ChatSession())
+                    running[sid] = asyncio.create_task(run_turn(sid, session, msg))
         except (WebSocketDisconnect, RuntimeError):
+            for sid in running:
+                if sid in sessions:
+                    sessions[sid].cancel.set()
             return
 
     return app

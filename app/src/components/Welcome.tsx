@@ -100,6 +100,7 @@ const slug = (s: string) => s.trim().replace(/[^A-Za-z0-9_\- ]+/g, "").replace(/
 function NewProjectWizard({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const catalog = useStore((s) => s.catalog)!;
+  const api = useStore((s) => s.api);
   const createProject = useStore((s) => s.createProject);
   const [step, setStep] = useState(0);
   const [query, setQuery] = useState("");
@@ -133,7 +134,8 @@ function NewProjectWizard({ onClose }: { onClose: () => void }) {
     setBusy(true);
     setError(null);
     try {
-      const rotated = profile && (W !== profile.width || H !== profile.height);
+      // Portrait on a catalog display: create at the swapped size, then keep the profile (flash, CPU) on it.
+      const rotated = !!profile && (W !== profile.width || H !== profile.height);
       await createProject({
         folder,
         name: projName,
@@ -141,7 +143,7 @@ function NewProjectWizard({ onClose }: { onClose: () => void }) {
         width: profile && !rotated ? 0 : W,
         height: profile && !rotated ? 0 : H,
         template,
-      });
+      }, rotated && profile ? { profile: profile.id, flash_mb: profile.flash_mb, cpu: profile.cpu } : undefined);
     } catch (e) {
       setError((e as Error).message);
       setBusy(false);
@@ -227,6 +229,9 @@ function NewProjectWizard({ onClose }: { onClose: () => void }) {
                 <button className={portrait ? "on" : ""} onClick={() => setPortrait(true)}>{t("wizard.portrait")}</button>
               </div>
             </div>
+            {profile && portrait && W !== profile.width && (
+              <p className="alert warn small">{t("wizard.portraitProfile", { id: profile.id, w: W, h: H })}</p>
+            )}
             {profile && (
               <dl className="specs">
                 <dt>{t("wizard.flash")}</dt><dd>{profile.flash_mb} MB</dd>
@@ -245,7 +250,7 @@ function NewProjectWizard({ onClose }: { onClose: () => void }) {
           </button>
           {catalog.templates.map((tp) => (
             <button key={tp.id} className={`template-card ${template === tp.id ? "selected" : ""}`} onClick={() => setTemplate(tp.id)}>
-              <div className="template-art"><Icon name="toggle" size={28} /><Icon name="slider" size={28} /><Icon name="number" size={28} /></div>
+              <TemplateThumb id={tp.id} w={W} h={H} url={api ? api.templateUrl(tp.id, W, H, Math.min(1, 480 / W, 260 / H)) : null} />
               <div className="template-title">{tp.title}</div>
               <div className="template-desc">{tp.description}</div>
             </button>
@@ -272,11 +277,31 @@ function NewProjectWizard({ onClose }: { onClose: () => void }) {
           <div className="summary">
             <span className="chip">{W}×{H}</span>
             {profile && <span className="chip">{profile.id}</span>}
+            {profile && portrait && W !== profile.width && <span className="chip warn-chip">{t("wizard.portraitChip")}</span>}
             <span className="chip">{template ? catalog.templates.find((x) => x.id === template)?.title : t("wizard.blank")}</span>
           </div>
           {error && <div className="alert error">{error}</div>}
         </div>
       )}
     </Modal>
+  );
+}
+
+/** Template preview rendered by the backend at the chosen resolution (falls back to icons while loading/failing). */
+function TemplateThumb({ url, w, h }: { id: string; url: string | null; w: number; h: number }) {
+  const [state, setState] = useState<"loading" | "ok" | "error">(url ? "loading" : "error");
+  useEffect(() => setState(url ? "loading" : "error"), [url]);
+  return (
+    <div className={`template-art thumb ${state}`}>
+      {state !== "ok" && (
+        <span className="thumb-fallback">
+          {state === "loading" ? <span className="mini-spin" /> : <><Icon name="toggle" size={24} /><Icon name="slider" size={24} /><Icon name="number" size={24} /></>}
+        </span>
+      )}
+      {url && state !== "error" && (
+        <img src={url} alt="" loading="lazy" style={{ aspectRatio: `${w}/${h}` }}
+          onLoad={() => setState("ok")} onError={() => setState("error")} />
+      )}
+    </div>
   );
 }
