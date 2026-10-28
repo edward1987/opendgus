@@ -157,6 +157,6 @@ def test_text_overflow_and_offscreen_elements_are_reported(tmp_path):
         Text(text="12:30", x=10, y=100, w=200, h=60, size=40),          # fits: no warning
     ]
     msgs = [str(i) for i in compile_project(p, tmp_path, write=False).issues]
-    assert any("far too long" in m and "widen it" in m for m in msgs)
+    assert any("This sentence" in m and "widen it" in m for m in msgs)
     assert any("outside the 800x480 screen" in m for m in msgs)
     assert not any("12:30" in m for m in msgs)
