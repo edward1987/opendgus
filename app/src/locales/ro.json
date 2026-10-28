@@ -369,7 +369,8 @@
     "needsKey": "Adăugați o cheie API pentru {{provider}} ca să începeți.",
     "setup": "Configurează",
     "providersError": "Furnizorii AI nu au putut fi încărcați: {{error}}",
-    "mcpHint": "Puteți conecta și Claude sau alt AI prin serverul MCP OpenDGUS: modificările apar aici live."
+    "mcpHint": "Puteți conecta și Claude sau alt AI prin serverul MCP OpenDGUS: modificările apar aici live.",
+    "mcpConnect": "Conectați o aplicație AI (MCP)"
   },
   "validate": {
     "title": "Verificare",
@@ -445,5 +446,24 @@
     "toPage": "pagina {{page}}",
     "changed": "Designul s-a schimbat: reporniți ca să-l aplicați",
     "invalidValue": "Introduceți un număr întreg"
+  },
+  "mcp": {
+    "title": "Conectați o aplicație AI (MCP)",
+    "intro": "Claude Desktop, Codex, Antigravity și alți clienți MCP pot proiecta ecrane prin serverul MCP OpenDGUS. Adăugați-l în aplicație cu setările de mai jos. Folderul proiectului este comun, așa că modificările făcute de AI apar aici live.",
+    "program": "Programul serverului MCP",
+    "devNote": "Versiune de dezvoltare: indică mediul Python. Copiile instalate ale OpenDGUS arată programul opendgus-mcp inclus.",
+    "unavailable": "Locația serverului MCP nu este cunoscută în acest mod. Porniți aplicația desktop sau citiți docs/mcp.md.",
+    "withProject": "Deschide acest proiect la pornire:",
+    "app_claude": "Claude Desktop",
+    "app_codex": "Codex",
+    "app_antigravity": "Antigravity",
+    "claudeHow": "Adăugați acest text în {{path}} (combinați-l cu \"mcpServers\" existente), apoi închideți și reporniți Claude Desktop.",
+    "codexHow": "Rulați într-un terminal:",
+    "codexTomlHow": "Sau adăugați în ~/.codex/config.toml:",
+    "antigravityHow": "Panoul Agent → … → MCP Servers → Manage → View raw config, apoi adăugați:",
+    "liveNote": "Cereți AI-ului, de exemplu: „Creează un ecran de termostat 800x480 în acest proiect.”",
+    "copy": "Copiază",
+    "copied": "Copiat",
+    "done": "Gata"
   }
 }

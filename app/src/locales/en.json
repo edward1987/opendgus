@@ -367,7 +367,8 @@
     "needsKey": "Add an API key for {{provider}} to start.",
     "setup": "Set up",
     "providersError": "Could not load the AI providers: {{error}}",
-    "mcpHint": "You can also connect Claude or another AI through the OpenDGUS MCP server: its changes appear here live."
+    "mcpHint": "You can also connect Claude or another AI through the OpenDGUS MCP server: its changes appear here live.",
+    "mcpConnect": "Connect an AI app (MCP)"
   },
   "validate": {
     "title": "Validate",
@@ -441,5 +442,24 @@
     "toPage": "page {{page}}",
     "changed": "The design changed: restart to apply",
     "invalidValue": "Enter a whole number"
+  },
+  "mcp": {
+    "title": "Connect an AI app (MCP)",
+    "intro": "Claude Desktop, Codex, Antigravity and other MCP clients can design screens through the OpenDGUS MCP server. Add it to the app with the settings below. The project folder is shared, so the AI's changes appear here live.",
+    "program": "MCP server program",
+    "devNote": "Development build: this points at your Python environment. Installed copies of OpenDGUS show the bundled opendgus-mcp program.",
+    "unavailable": "The MCP server location is not known in this mode. Run the desktop app, or see docs/mcp.md.",
+    "withProject": "Open this project at start-up:",
+    "app_claude": "Claude Desktop",
+    "app_codex": "Codex",
+    "app_antigravity": "Antigravity",
+    "claudeHow": "Add this to {{path}} (merge it with any existing \"mcpServers\"), then quit and restart Claude Desktop.",
+    "codexHow": "Run this in a terminal:",
+    "codexTomlHow": "Or add this to ~/.codex/config.toml:",
+    "antigravityHow": "Agent panel → … → MCP Servers → Manage → View raw config, then add:",
+    "liveNote": "Ask the AI for example: \"Create a 800x480 thermostat screen in this project.\"",
+    "copy": "Copy",
+    "copied": "Copied",
+    "done": "Done"
   }
 }

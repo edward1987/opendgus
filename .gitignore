@@ -15,3 +15,8 @@ node_modules/
 app/out/
 app/release/
 tools/csharp_harness/out/
+# Packaging outputs (PyInstaller sidecar, electron-builder)
+packaging/build/
+packaging/dist/
+packaging/*.log
+release/

@@ -4,8 +4,23 @@ OpenDGUS includes an MCP server, so an AI assistant can design DWIN screens for 
 looks at the rendered result and fixes the layout, and builds the files. The project folder on disk is the shared
 state: if the OpenDGUS editor has the same project open, you see the AI's changes live.
 
-The examples below use `C:\path\to\opendgus\.venv\Scripts\opendgus-mcp.exe`. On Linux/macOS the command is
-`/path/to/opendgus/.venv/bin/opendgus-mcp`. After `pip install opendgus` it is simply `opendgus-mcp`.
+## Where the `opendgus-mcp` program is
+
+The easiest way to get the right snippet is in the editor: **AI tab → plug button ("Connect an AI app (MCP)")**. It
+shows the config for Claude Desktop, Codex and Antigravity with the real path on your computer and a copy button.
+
+| How OpenDGUS was installed | MCP command |
+|---|---|
+| Windows installer (per user, default folder) | `%LOCALAPPDATA%\Programs\OpenDGUS\resources\backend\opendgus-mcp.exe` |
+| Windows installer (custom folder) | `<install folder>\resources\backend\opendgus-mcp.exe` |
+| Windows portable `.exe` | unpacks to a new temporary folder on every start, so use the installer if you want MCP |
+| macOS (`.dmg`, dragged to Applications) | `/Applications/OpenDGUS.app/Contents/Resources/backend/opendgus-mcp` |
+| Linux AppImage | the AppImage mounts at a new temporary path on every start, so extract it once (`./OpenDGUS-*.AppImage --appimage-extract`) and use `squashfs-root/resources/backend/opendgus-mcp` |
+| From source | `C:\path\to\opendgus\.venv\Scripts\opendgus-mcp.exe` (Linux/macOS: `/path/to/opendgus/.venv/bin/opendgus-mcp`) |
+| `pip install opendgus` | `opendgus-mcp` |
+
+The installed program needs no Python: it is the same self-contained bundle the editor uses. The examples below use
+`C:\path\to\opendgus-mcp.exe`; replace it with the path from the table.
 Set the environment variable `OPENDGUS_PROJECT` to open a project at start-up (optional).
 
 ## Claude Desktop
@@ -15,7 +30,7 @@ restart Claude Desktop:
 {
   "mcpServers": {
     "opendgus": {
-      "command": "C:\\path\\to\\opendgus\\.venv\\Scripts\\opendgus-mcp.exe",
+      "command": "C:\\path\\to\\opendgus-mcp.exe",
       "env": { "OPENDGUS_PROJECT": "C:\\Users\\me\\Documents\\my-screen" }
     }
   }
@@ -24,12 +39,12 @@ restart Claude Desktop:
 
 ## OpenAI Codex (CLI / desktop)
 ```bash
-codex mcp add opendgus -- C:\path\to\opendgus\.venv\Scripts\opendgus-mcp.exe
+codex mcp add opendgus -- C:\path\to\opendgus-mcp.exe
 ```
 Or add this to `~/.codex/config.toml`:
 ```toml
 [mcp_servers.opendgus]
-command = 'C:\path\to\opendgus\.venv\Scripts\opendgus-mcp.exe'
+command = 'C:\path\to\opendgus-mcp.exe'
 ```
 
 ## Google Antigravity
@@ -37,7 +52,7 @@ Agent panel → `…` → MCP Servers → Manage → View raw config (`~/.gemini
 ```json
 {
   "mcpServers": {
-    "opendgus": { "command": "C:\\path\\to\\opendgus\\.venv\\Scripts\\opendgus-mcp.exe" }
+    "opendgus": { "command": "C:\\path\\to\\opendgus-mcp.exe" }
   }
 }
 ```

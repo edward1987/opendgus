@@ -1,0 +1,85 @@
+name: Release
+
+# Builds the Python sidecar (PyInstaller) and the desktop installers on every OS when a v* tag is pushed,
+# and attaches them to the GitHub release for that tag. Installers are unsigned.
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    name: Installers (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [windows-latest, macos-latest, ubuntu-latest]
+    env:
+      CSC_IDENTITY_AUTO_DISCOVERY: "false" # no signing certificates in CI
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          cache: npm
+          cache-dependency-path: app/package-lock.json
+
+      - name: Install Python package + PyInstaller
+        run: python -m pip install ".[build]"
+
+      - name: Build sidecar (opendgus-server / opendgus-mcp / opendgus-load)
+        working-directory: app
+        env:
+          OPENDGUS_PYTHON: python
+        run: node scripts/dist-backend.mjs
+
+      - name: Smoke-test sidecar
+        shell: bash
+        run: |
+          exe=packaging/dist/opendgus-backend/opendgus-server
+          [ -f "$exe.exe" ] && exe="$exe.exe"
+          "$exe" --port 0 > ready.txt &
+          pid=$!
+          for i in $(seq 1 60); do grep -q '"ready"' ready.txt && break; sleep 1; done
+          cat ready.txt
+          port=$(python -c "import json; print(json.loads(open('ready.txt').readline())['port'])")
+          token=$(python -c "import json; print(json.loads(open('ready.txt').readline())['token'])")
+          curl -fsS -H "X-OpenDGUS-Token: $token" "http://127.0.0.1:$port/api/health"
+          kill $pid || true
+
+      - name: Install app dependencies
+        working-directory: app
+        run: npm ci
+
+      - name: Build installers
+        working-directory: app
+        run: npm run dist:app
+
+      - name: Upload build artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: opendgus-${{ matrix.os }}
+          if-no-files-found: error
+          path: |
+            app/release/*.exe
+            app/release/*.dmg
+            app/release/*.AppImage
+
+      - name: Attach to GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v2
+        with:
+          draft: false
+          files: |
+            app/release/*.exe
+            app/release/*.dmg
+            app/release/*.AppImage

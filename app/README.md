@@ -21,18 +21,42 @@ Other scripts:
 | `npm start` | runs the built app (`electron .`) |
 | `npm test` | vitest unit tests (schema→form mapping, snapping, undo stack, project helpers) |
 | `npm run smoke -- [out.png] [projectFolder] [--select c5] [--lang ro]` | builds, opens a project (by default a fresh `home_control` template) and saves a screenshot |
-| `npm run dist` | build and package with electron-builder (optional) |
+| `npm run dist:backend` | builds the Python sidecar with PyInstaller into `packaging/dist/opendgus-backend` |
+| `npm run dist:app` | `npm run build` + electron-builder for the current OS (needs the sidecar built first) |
+| `npm run dist` | both of the above: installers in `app/release/` |
+
+## Packaging (installers)
+
+```bash
+uv pip install -e ".[build]"     # once, in the repo root: PyInstaller into .venv
+cd app
+npm run dist                     # sidecar + renderer + electron-builder for this OS
+```
+
+* `packaging/opendgus-backend.spec` builds one folder with three console programs sharing one `_internal/` bundle:
+  `opendgus-server` (editor backend), `opendgus-mcp` (MCP server for external AI apps) and `opendgus-load` (flasher).
+  electron-builder copies it to `resources/backend`.
+* Output in `app/release/`: Windows `OpenDGUS-Setup-<ver>-x64.exe` (NSIS) and `OpenDGUS-<ver>-portable-x64.exe`,
+  macOS `.dmg`, Linux `.AppImage`. Builds are unsigned.
+* Icons: `packaging/icons/make_icons.py` renders `icon.png`/`icon.ico` from the brand mark.
+* `.github/workflows/release.yml` builds all three platforms on a `v*` tag and attaches the installers to a GitHub
+  release.
+* Check a packaged build without Python: `release/win-unpacked/OpenDGUS.exe --smoke-screenshot out.png --project DIR`
+  (add `--smoke-dialog mcp` to capture the "Connect an AI app (MCP)" dialog).
 
 ## How the backend is found
 
-At start-up the main process runs the Python backend with `python -m opendgus.server --port 0 [--project DIR]`, reads
+At start-up the main process runs the backend with `--port 0 [--project DIR]`, reads
 its `{"event":"ready","port":N,"token":"..."}` line, and passes port and token to the renderer through the preload
 bridge (`window.opendgus`). It kills the backend when the app quits.
 
+* **Installed app (`app.isPackaged`):** the bundled sidecar `resources/backend/opendgus-server(.exe)`, built by
+  PyInstaller; no Python is needed and `OPENDGUS_PYTHON` is ignored. (`OPENDGUS_NO_SIDECAR=1` falls back to Python.)
+* **Development** runs `python -m opendgus.server`.
 * **Python interpreter:** the `OPENDGUS_PYTHON` environment variable if set; otherwise the repo's `.venv`
   (`.venv/Scripts/python.exe` on Windows, `.venv/bin/python` elsewhere); otherwise `python` on PATH.
 * **Backend source:** the folder that contains `src/opendgus/server.py`. That is `OPENDGUS_ROOT` if set, else the repo
-  root (the parent of `app/`), else `resources/backend` in a packaged build. `src/` is added to `PYTHONPATH`.
+  root (the parent of `app/`). `src/` is added to `PYTHONPATH`.
 * Set `OPENDGUS_DEBUG=1` to echo backend and renderer logs to the terminal. F12 toggles DevTools.
 
 The renderer can also run in a normal browser for UI work: start a backend by hand and open

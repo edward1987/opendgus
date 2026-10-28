@@ -5,6 +5,7 @@
   "private": true,
   "description": "OpenDGUS desktop editor for DWIN T5L (DGUS II) touch displays",
   "license": "GPL-3.0-only",
+  "author": "OpenDGUS contributors",
   "main": "dist-electron/main.js",
   "scripts": {
     "dev": "node scripts/dev.mjs",
@@ -15,7 +16,9 @@
     "typecheck": "tsc -p tsconfig.json --noEmit && tsc -p tsconfig.electron.json --noEmit",
     "test": "vitest run",
     "smoke": "node scripts/smoke.mjs",
-    "dist": "npm run build && electron-builder"
+    "dist": "npm run dist:backend && npm run dist:app",
+    "dist:backend": "node scripts/dist-backend.mjs",
+    "dist:app": "npm run build && electron-builder --publish never"
   },
   "dependencies": {
     "i18next": "26.4.2",
@@ -38,13 +41,72 @@
     "vitest": "5.0.3"
   },
   "build": {
-    "appId": "org.opendgus.editor",
+    "appId": "org.opendgus.app",
     "productName": "OpenDGUS",
-    "directories": { "output": "release" },
-    "files": ["dist/**", "dist-electron/**", "package.json"],
-    "extraResources": [{ "from": "../src", "to": "backend/src" }],
-    "win": { "target": "nsis" },
-    "linux": { "target": "AppImage" },
-    "mac": { "target": "dmg" }
+    "copyright": "Copyright (C) OpenDGUS contributors. GPL-3.0.",
+    "directories": {
+      "output": "release",
+      "buildResources": "../packaging/icons"
+    },
+    "files": [
+      "dist/**",
+      "dist-electron/**",
+      "package.json"
+    ],
+    "extraResources": [
+      {
+        "from": "../packaging/dist/opendgus-backend",
+        "to": "backend",
+        "filter": [
+          "**/*"
+        ]
+      }
+    ],
+    "artifactName": "${productName}-${version}-${os}-${arch}.${ext}",
+    "win": {
+      "target": [
+        {
+          "target": "nsis",
+          "arch": [
+            "x64"
+          ]
+        },
+        {
+          "target": "portable",
+          "arch": [
+            "x64"
+          ]
+        }
+      ],
+      "icon": "../packaging/icons/icon.ico",
+      "legalTrademarks": "OpenDGUS"
+    },
+    "nsis": {
+      "oneClick": false,
+      "perMachine": false,
+      "allowToChangeInstallationDirectory": true,
+      "license": "../LICENSE",
+      "artifactName": "${productName}-Setup-${version}-${arch}.${ext}",
+      "shortcutName": "OpenDGUS",
+      "deleteAppDataOnUninstall": false
+    },
+    "portable": {
+      "artifactName": "${productName}-${version}-portable-${arch}.${ext}"
+    },
+    "mac": {
+      "target": [
+        "dmg"
+      ],
+      "category": "public.app-category.developer-tools",
+      "icon": "../packaging/icons/icon.png"
+    },
+    "linux": {
+      "target": [
+        "AppImage"
+      ],
+      "category": "Development",
+      "icon": "../packaging/icons/icon.png",
+      "synopsis": "Designer for DWIN T5L (DGUS II) touch displays"
+    }
   }
 }

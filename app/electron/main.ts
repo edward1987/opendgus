@@ -2,7 +2,7 @@
 import { app, BrowserWindow, dialog, ipcMain, Menu, safeStorage, session, shell } from "electron";
 import * as fs from "fs";
 import * as path from "path";
-import { Backend, BackendInfo, findBackendRoot } from "./backend";
+import { Backend, BackendInfo, findBackendRoot, findBundledBackend, mcpCommand, McpCommand, serverLaunch } from "./backend";
 
 interface Cli {
   smokeOut?: string;
@@ -11,6 +11,7 @@ interface Cli {
   lang?: string; // smoke: UI language
   smokeAiDemo?: string; // smoke: show a canned AI transcript (no network); "settings" also opens the settings
   smokeRun?: string; // smoke: open Run mode and tap "x,y[,holdMs];x,y..." (device px) before the capture
+  smokeDialog?: string; // smoke: open this dialog (e.g. "mcp") before the capture
 }
 
 function parseCli(argv: string[]): Cli {
@@ -25,6 +26,7 @@ function parseCli(argv: string[]): Cli {
     else if (a === "--lang") out.lang = argv[++i];
     else if (a === "--smoke-ai-demo") out.smokeAiDemo = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i] : "";
     else if (a === "--smoke-run") out.smokeRun = argv[i + 1] && !argv[i + 1].startsWith("--") ? argv[++i] : "";
+    else if (a === "--smoke-dialog") out.smokeDialog = argv[++i];
   }
   if (out.smokeOut) out.smokeOut = path.resolve(out.smokeOut);
   if (out.project) out.project = path.resolve(out.project);
@@ -37,6 +39,7 @@ const backend = new Backend();
 if (cli.smokeOut) app.setPath("userData", path.join(app.getPath("temp"), "opendgus-smoke-profile"));
 let backendInfo: BackendInfo | null = null;
 let backendError: string | null = null;
+let mcp: McpCommand | null = null;
 let win: BrowserWindow | null = null;
 
 // ------------------------------------------------------------------ recent projects
@@ -211,8 +214,10 @@ function registerIpc() {
     lang: cli.lang ?? null,
     smokeAiDemo: cli.smokeOut && cli.smokeAiDemo !== undefined ? cli.smokeAiDemo : null,
     smokeRun: cli.smokeOut && cli.smokeRun !== undefined ? cli.smokeRun : null,
+    smokeDialog: cli.smokeOut ? cli.smokeDialog ?? null : null,
     version: app.getVersion(),
     platform: process.platform,
+    mcp,
   }));
   ipcMain.handle("dialog:openFolder", async (_e, opts: { title?: string; create?: boolean } = {}) => {
     const props: Electron.OpenDialogOptions["properties"] = ["openDirectory"];
@@ -298,8 +303,11 @@ if (!cli.smokeOut && !app.requestSingleInstanceLock()) {
     Menu.setApplicationMenu(null);
     registerIpc();
     const root = findBackendRoot(app.getAppPath(), process.resourcesPath);
+    // Packaged: the PyInstaller sidecar in resources/backend (no Python needed). Dev: Python from the repo .venv.
+    const sidecar = app.isPackaged ? findBundledBackend(process.resourcesPath) : null;
+    mcp = mcpCommand(root, sidecar);
     try {
-      backendInfo = await backend.start(root, cli.project);
+      backendInfo = await backend.start(serverLaunch(root, sidecar, cli.project));
     } catch (e) {
       backendError = String((e as Error).message || e);
       console.error(backendError);

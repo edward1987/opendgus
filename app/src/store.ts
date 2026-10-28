@@ -9,7 +9,7 @@ import i18n from "./i18n";
 
 export type RightTab = "props" | "insert" | "vars" | "ai";
 export type Mode = "edit" | "run";
-export type DialogName = null | "validate" | "build" | "device" | "theme" | "display";
+export type DialogName = null | "validate" | "build" | "device" | "theme" | "display" | "mcp";
 
 export interface Toast {
   id: number;
@@ -185,6 +185,7 @@ export const useStore = create<State>((set, get) => {
           }
           if (cfg.smokeAiDemo !== null && cfg.smokeAiDemo !== undefined) set({ rightTab: "ai" });
           if (cfg.smokeRun !== null && cfg.smokeRun !== undefined) set({ mode: "run" });
+          if (cfg.smokeDialog === "mcp") set({ dialog: "mcp", rightTab: "ai" });
         }
       } catch (e) {
         set({ backendError: errText(e) });

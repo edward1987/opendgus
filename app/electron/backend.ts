@@ -1,4 +1,5 @@
-// Spawns the Python backend (`python -m opendgus.server --port 0`) and waits for its ready line.
+// Spawns the backend and waits for its ready line. Packaged builds run the bundled PyInstaller sidecar
+// (resources/backend/opendgus-server[.exe]); development runs `python -m opendgus.server --port 0`.
 import { ChildProcess, spawn } from "child_process";
 import * as fs from "fs";
 import * as path from "path";
@@ -34,31 +35,67 @@ export function findPython(root: string): string {
   return process.platform === "win32" ? "python" : "python3";
 }
 
+const EXE = process.platform === "win32" ? ".exe" : "";
+
+/** Bundled PyInstaller sidecar folder (`resources/backend`), or null when it is not there (dev, or a source build). */
+export function findBundledBackend(resourcesPath: string): string | null {
+  if (process.env.OPENDGUS_NO_SIDECAR) return null;
+  const dir = path.join(resourcesPath, "backend");
+  return fs.existsSync(path.join(dir, `opendgus-server${EXE}`)) ? dir : null;
+}
+
+/** How to launch a backend program: the bundled sidecar when `sidecarDir` is set, else Python from `root`. */
+export interface LaunchSpec {
+  command: string;
+  args: string[];
+  cwd: string;
+  env: NodeJS.ProcessEnv;
+}
+
+export function serverLaunch(root: string, sidecarDir: string | null, project?: string): LaunchSpec {
+  const tail = ["--port", "0", ...(project ? ["--project", project] : [])];
+  const env: NodeJS.ProcessEnv = { ...process.env, PYTHONUNBUFFERED: "1", PYTHONIOENCODING: "utf-8" };
+  if (sidecarDir) {
+    return { command: path.join(sidecarDir, `opendgus-server${EXE}`), args: tail, cwd: sidecarDir, env };
+  }
+  env.PYTHONPATH = [path.join(root, "src"), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter);
+  return { command: findPython(root), args: ["-m", "opendgus.server", ...tail], cwd: root, env };
+}
+
+/** The command an external AI app (Claude Desktop, Codex, Antigravity) should run to reach the MCP server. */
+export interface McpCommand {
+  command: string;
+  args: string[];
+  source: "bundled" | "venv" | "python";
+}
+
+export function mcpCommand(root: string, sidecarDir: string | null): McpCommand {
+  if (sidecarDir) return { command: path.join(sidecarDir, `opendgus-mcp${EXE}`), args: [], source: "bundled" };
+  const venv =
+    process.platform === "win32"
+      ? path.join(root, ".venv", "Scripts", "opendgus-mcp.exe")
+      : path.join(root, ".venv", "bin", "opendgus-mcp");
+  if (fs.existsSync(venv)) return { command: venv, args: [], source: "venv" };
+  return { command: findPython(root), args: ["-m", "opendgus.mcp_server"], source: "python" };
+}
+
 export class Backend {
   proc: ChildProcess | null = null;
   info: BackendInfo | null = null;
   log: string[] = [];
 
-  start(root: string, project?: string, timeoutMs = 30000): Promise<BackendInfo> {
-    const python = findPython(root);
-    const args = ["-m", "opendgus.server", "--port", "0"];
-    if (project) args.push("--project", project);
-    const env = {
-      ...process.env,
-      PYTHONPATH: [path.join(root, "src"), process.env.PYTHONPATH].filter(Boolean).join(path.delimiter),
-      PYTHONUNBUFFERED: "1",
-      PYTHONIOENCODING: "utf-8",
-    };
+  start(spec: LaunchSpec, timeoutMs = 30000): Promise<BackendInfo> {
+    const { command, args, cwd, env } = spec;
     return new Promise((resolve, reject) => {
       let settled = false;
       const fail = (msg: string) => {
         if (settled) return;
         settled = true;
-        reject(new Error(`${msg}\npython: ${python}\n${this.log.slice(-20).join("\n")}`));
+        reject(new Error(`${msg}\ncommand: ${command}\n${this.log.slice(-20).join("\n")}`));
       };
       let proc: ChildProcess;
       try {
-        proc = spawn(python, args, { cwd: root, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
+        proc = spawn(command, args, { cwd, env, windowsHide: true, stdio: ["ignore", "pipe", "pipe"] });
       } catch (e) {
         fail(String(e));
         return;

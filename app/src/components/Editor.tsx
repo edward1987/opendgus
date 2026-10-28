@@ -5,6 +5,7 @@ import { currentPage, selectedItems, useStore } from "../store";
 import { CanvasView } from "./CanvasView";
 import { BuildDialog, DeviceDialog, ValidateDialog } from "./Dialogs";
 import { LeftPanel } from "./LeftPanel";
+import { McpDialog } from "./McpDialog";
 import { RightPanel } from "./RightPanel";
 import { RunView } from "./RunView";
 import { ThemeDialog } from "./ThemeDialog";
@@ -86,6 +87,7 @@ export function Editor() {
       {dialog === "build" && <BuildDialog onClose={() => setDialog(null)} />}
       {dialog === "device" && <DeviceDialog onClose={() => setDialog(null)} />}
       {dialog === "theme" && <ThemeDialog onClose={() => setDialog(null)} />}
+      {dialog === "mcp" && <McpDialog onClose={() => setDialog(null)} />}
     </div>
   );
 }

@@ -32,6 +32,9 @@ export function AiPanel() {
           {prov && <span className="ai-prov-model">{modelFor(ai.settings, prov)}</span>}
           <Icon name={ai.settingsOpen ? "up" : "down"} size={12} />
         </button>
+        <button className="icon-btn" title={t("ai.mcpConnect")} onClick={() => useStore.getState().setDialog("mcp")}>
+          <Icon name="plug" />
+        </button>
         <button className="icon-btn" title={t("ai.reset")} disabled={!ai.chat.items.length} onClick={() => ai.reset()}>
           <Icon name="newChat" />
         </button>
@@ -170,6 +173,9 @@ function Transcript() {
             ))}
           </div>
           <p className="muted small">{t("ai.mcpHint")}</p>
+          <button className="btn sm ghost mcp-link" onClick={() => useStore.getState().setDialog("mcp")}>
+            <Icon name="plug" size={13} /> {t("ai.mcpConnect")}
+          </button>
         </div>
       )}
       {chat.items.map((it, i) => <Item key={it.key} item={it} live={chat.running && i === chat.items.length - 1} />)}

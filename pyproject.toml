@@ -30,6 +30,7 @@ dependencies = [
 
 [project.optional-dependencies]
 dev = ["pytest>=8", "httpx>=0.27"]
+build = ["pyinstaller>=6.10"]
 
 [project.scripts]
 opendgus-load = "opendgus.device.dwinload:main"

@@ -1,5 +1,6 @@
 // HTTP/WebSocket client for the Python backend (src/opendgus/server.py).
 import type { AiProvider } from "./aiSettings";
+import type { McpCommand } from "./mcpConfig";
 import type { Catalog, Project } from "./types";
 
 export interface Bridge {
@@ -13,8 +14,11 @@ export interface Bridge {
     lang?: string | null;
     smokeAiDemo?: string | null;
     smokeRun?: string | null;
+    smokeDialog?: string | null;
     version: string;
     platform: string;
+    /** Command that starts the MCP server (bundled sidecar when installed), for external AI apps. */
+    mcp?: McpCommand | null;
   }>;
   openFolder(opts?: { title?: string; create?: boolean }): Promise<string | null>;
   openImage(title?: string): Promise<string | null>;

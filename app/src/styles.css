@@ -591,3 +591,12 @@ textarea { resize: vertical; }
 .toast { padding: 10px 14px; border-radius: 10px; background: var(--raised); border: 1px solid var(--border-2); box-shadow: var(--shadow); max-width: 380px; animation: pop 0.15s ease-out; }
 .toast-error { border-color: rgba(239, 68, 68, 0.6); background: #2a1418; }
 .toast-success { border-color: rgba(34, 197, 94, 0.5); }
+
+/* Connect an AI app (MCP) */
+.mcp-snippet { position: relative; }
+.mcp-code { margin: 0; padding: 10px 92px 10px 12px; background: var(--bg-2); border: 1px solid var(--border); border-radius: var(--radius-sm); font-family: var(--mono); font-size: 12px; white-space: pre-wrap; overflow-wrap: anywhere; user-select: text; max-height: 220px; overflow: auto; }
+.mcp-copy { position: absolute; top: 6px; right: 6px; }
+.mcp-check { display: flex; align-items: flex-start; gap: 8px; font-size: 12px; }
+.mcp-check .mono { word-break: break-all; }
+.mcp-dialog p { margin: 0; }
+.ai-empty .mcp-link { display: inline-flex; align-items: center; gap: 6px; }
