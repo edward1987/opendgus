@@ -1,5 +1,5 @@
 // HTTP/WebSocket client for the Python backend (src/opendgus/server.py).
-import type { AiProvider } from "./aiSettings";
+import type { AiProvider, ModelInfo, ProviderId } from "./aiSettings";
 import type { McpCommand } from "./mcpConfig";
 import type { Catalog, Project } from "./types";
 
@@ -96,6 +96,15 @@ export const bridge: Bridge = window.opendgus ?? browserBridge();
 
 export class ApiError extends Error {}
 
+export interface UploadProgress {
+  phase: "idle" | "build" | "pause" | "write" | "reset" | "done" | "error";
+  done?: number;
+  total?: number;
+  file?: string | null;
+  elapsed?: number;
+  error?: string;
+}
+
 export class Api {
   readonly base: string;
   constructor(readonly port: number, readonly token: string) {
@@ -119,6 +128,11 @@ export class Api {
   async tool<T = any>(name: string, args: Record<string, unknown> = {}): Promise<T> {
     const r = await this.req<{ ok: boolean; result: T }>(`/api/tools/${name}`, { method: "POST", body: JSON.stringify(args) });
     return r.result;
+  }
+
+  /** Progress of a running device_upload (poll while the tool call is pending). */
+  uploadProgress() {
+    return this.req<UploadProgress>("/api/device/progress");
   }
 
   getProject() {
@@ -162,6 +176,15 @@ export class Api {
 
   aiProviders() {
     return this.req<AiProvider[]>("/api/ai/providers");
+  }
+
+  /** Live model list of a provider (with prices when it reports them, e.g. OpenRouter). */
+  async aiModels(provider: ProviderId, apiKey: string | null, baseUrl: string | null) {
+    const r = await this.req<{ models: ModelInfo[] }>("/api/ai/models", {
+      method: "POST",
+      body: JSON.stringify({ provider, api_key: apiKey, base_url: baseUrl }),
+    });
+    return r.models;
   }
 
   /** WebSocket for the AI designer (one per chat panel). */

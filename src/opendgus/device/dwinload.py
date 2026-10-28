@@ -273,12 +273,13 @@ class Dgus:
                 out += words_to_bytes(self.read_words(RAM_VP + i, min(0x78, n - i)))
         return out
 
-    def upload_slot(self, data: bytes, slot: int, delay_ms: int = 6000, log=print) -> None:
+    def upload_slot(self, data: bytes, slot: int, delay_ms: int = 6000, log=print, progress=None) -> None:
+        """progress(n): called with the bytes of this file staged so far (padded to whole 32 KB blocks)."""
         nblocks = math.ceil(len(data) / BLOCK_SIZE)
         t0 = time.monotonic()
         for i in range(nblocks):
             chunk = data[i * BLOCK_SIZE:(i + 1) * BLOCK_SIZE].ljust(BLOCK_SIZE, b"\xFF")
-            self.stage(chunk)
+            self.stage(chunk, progress=progress and (lambda n, i=i: progress(i * BLOCK_SIZE + min(n, BLOCK_SIZE))))
             self.flash_block(slot * 8 + i, delay_ms)
             log(f"    block {i + 1}/{nblocks}  ({(i + 1) * BLOCK_SIZE // 1024} KB, {time.monotonic() - t0:.0f}s)")
 

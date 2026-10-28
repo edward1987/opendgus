@@ -217,3 +217,22 @@ def test_stop_cancels_a_running_turn(tmp_path, monkeypatch):
                 break
         assert ev["stop_reason"] == "cancelled"
     assert all(pg["name"] != "Should not exist" for pg in T.get_project()["pages"])
+
+
+def test_model_list_parse_prices():
+    from opendgus.ai.models import parse
+    ms = parse({"data": [
+        {"id": "z/model", "name": "Z", "context_length": 200000, "pricing": {"prompt": "0.000003", "completion": "0.000015"}},
+        {"id": "a/free", "pricing": {"prompt": "0", "completion": "0"}},
+        {"id": "router", "pricing": {"prompt": "-1", "completion": "-1"}},
+        {"id": "claude-x", "display_name": "Claude X"},
+    ]})
+    assert [m["id"] for m in ms] == ["a/free", "claude-x", "router", "z/model"]
+    z = ms[-1]
+    assert (z["name"], z["context"], z["input"], z["output"]) == ("Z", 200000, 3.0, 15.0)
+    assert ms[0]["input"] == 0 and ms[2]["input"] is None and ms[1]["name"] == "Claude X"
+
+
+def test_openrouter_is_a_provider():
+    from opendgus.ai import PROVIDERS
+    assert any(p["id"] == "openrouter" and p["needs_key"] for p in PROVIDERS)

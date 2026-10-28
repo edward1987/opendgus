@@ -9,9 +9,11 @@ API
   GET  /api/health
   GET  /api/tools                         tool list with JSON schemas
   POST /api/tools/{name}                  call a tool with a JSON object of arguments
+  GET  /api/device/progress               progress of a running device_upload (phase, done/total bytes, file)
   GET  /api/project                       current project JSON (+ folder)
   PUT  /api/project                       replace the project (validated, saved atomically)
   GET  /api/catalog                       widgets, DGUS controls, element schema, theme tokens, profiles, templates
+  POST /api/ai/models                     {"provider","api_key","base_url"} -> live model list (+ prices if reported)
   GET  /api/preview/{page}.png?scale=&pressed=id1,id2   fast page render (initial state)
   WS   /ws                                {"type": "project_changed"} when project.json changes on disk
 """
@@ -89,6 +91,11 @@ def create_app(token: str = TOKEN) -> FastAPI:
         except (T.ToolError, KeyError, ValueError, ValidationError, TypeError) as e:
             msg = e.args[0] if isinstance(e, KeyError) and e.args else str(e)
             return JSONResponse({"ok": False, "error": str(msg)}, status_code=400)
+
+    @app.get("/api/device/progress")
+    async def device_progress():
+        # async: answered on the event loop while device_upload runs in the thread pool
+        return T.UPLOAD_PROGRESS
 
     @app.get("/api/project")
     def get_project():
@@ -188,6 +195,16 @@ def create_app(token: str = TOKEN) -> FastAPI:
     @app.get("/api/ai/providers")
     def ai_providers():
         return AI.PROVIDERS
+
+    @app.post("/api/ai/models")
+    def ai_models(body: dict = Body(default_factory=dict)):
+        """{"provider", "api_key", "base_url"} -> the provider's live model list (with prices when reported)."""
+        from .ai.models import ModelListError, list_models
+        try:
+            return {"ok": True, "models": list_models(str(body.get("provider", "")), body.get("api_key") or None,
+                                                       body.get("base_url") or None)}
+        except ModelListError as e:
+            return JSONResponse({"ok": False, "error": str(e)}, status_code=400)
 
     @app.websocket("/ws/ai")
     async def ws_ai(socket: WebSocket):

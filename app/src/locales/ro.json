@@ -350,6 +350,14 @@
     "provider": "Furnizor",
     "model": "Model",
     "modelOther": "Altul…",
+    "modelSearch": "Caută modele…",
+    "modelNone": "Niciun model nu se potrivește",
+    "modelUse": "Folosește „{{model}}”",
+    "modelsCount": "{{count}} modele",
+    "modelsReload": "Reîncarcă lista de modele de la furnizor",
+    "modelsNeedKey": "Adaugă cheia API pentru a încărca lista de modele",
+    "modelsHint": "Apasă reîncărcare pentru lista de modele",
+    "modelsError": "Nu s-au putut încărca modelele: {{error}}",
     "modelCustom": "ID model",
     "apiKey": "Cheie API",
     "apiKeySaved": "Salvată, criptată de sistem",
@@ -413,7 +421,17 @@
     "confirm": "Am înțeles, suprascrie display-ul",
     "upload": "Compilează și încarcă",
     "uploading": "Se încarcă… poate dura un minut",
-    "uploaded": "Încărcare terminată"
+    "uploaded": "Încărcare terminată",
+    "remaining": "mai sunt {{time}}",
+    "phase": {
+      "idle": "Pornire…",
+      "build": "Se construiește proiectul…",
+      "pause": "Se pune afișajul pe pauză…",
+      "write": "Se scrie {{file}}",
+      "reset": "Se resetează afișajul…",
+      "done": "Gata",
+      "error": "Eșuat"
+    }
   },
   "theme": {
     "title": "Temă",

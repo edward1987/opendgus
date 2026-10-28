@@ -4,7 +4,8 @@ import { create } from "zustand";
 import i18n from "./i18n";
 import { addUserMessage, AiEvent, applyEvent, ChatState, emptyChat, parseEvent, stopTurn } from "./lib/aiChat";
 import {
-  AiProvider, AiSettings, chatRequest, DEFAULT_SETTINGS, normalizeSettings, ProviderId, secretName, SETTINGS_KEY,
+  AiProvider, AiSettings, baseUrlFor, chatRequest, DEFAULT_SETTINGS, ModelLists, MODELS_KEY, normalizeModelLists,
+  normalizeSettings, ProviderId, secretName, SETTINGS_KEY,
 } from "./lib/aiSettings";
 import { bridge } from "./lib/api";
 import { useStore } from "./store";
@@ -20,12 +21,18 @@ interface AiState {
   chat: ChatState;
   session: string;
   settingsOpen: boolean;
+  /** live model lists per provider (remembered between runs) */
+  modelLists: ModelLists;
+  modelsLoading: Partial<Record<ProviderId, boolean>>;
+  modelsError: Partial<Record<ProviderId, string | null>>;
 
   load(): Promise<void>;
   updateSettings(s: AiSettings): void;
   setApiKey(p: ProviderId, key: string): Promise<void>;
   removeApiKey(p: ProviderId): Promise<void>;
   setSettingsOpen(open: boolean): void;
+  /** Fetch the provider's model list from its API (needs the key when the provider requires one). */
+  fetchModels(p: ProviderId): Promise<void>;
   send(text: string): void;
   stop(): void;
   reset(): void;
@@ -90,13 +97,17 @@ export const useAi = create<AiState>((set, get) => {
     chat: emptyChat(),
     session: newSession(),
     settingsOpen: false,
+    modelLists: {},
+    modelsLoading: {},
+    modelsError: {},
 
     async load() {
       if (get().loaded) return;
       const api = useStore.getState().api;
-      const [providers, raw] = await Promise.all([
+      const [providers, raw, rawLists] = await Promise.all([
         api ? api.aiProviders().catch((e: Error) => (set({ providersError: e.message }), [] as AiProvider[])) : Promise.resolve([]),
         bridge.settingsGet(SETTINGS_KEY).catch(() => null),
+        bridge.settingsGet(MODELS_KEY).catch(() => null),
       ]);
       const settings = normalizeSettings(raw);
       const keys: Partial<Record<ProviderId, string | null>> = {};
@@ -109,19 +120,49 @@ export const useAi = create<AiState>((set, get) => {
       }
       const prov = providers.find((p) => p.id === settings.provider) ?? providers[0];
       const missingKey = !!prov && prov.needs_key && !keys[prov.id];
-      set({ loaded: true, providers, settings, keys, keyPersisted, settingsOpen: missingKey && useStore.getState().smokeAiDemo === null });
+      set({ loaded: true, providers, settings, keys, keyPersisted, modelLists: normalizeModelLists(rawLists),
+        settingsOpen: missingKey && useStore.getState().smokeAiDemo === null });
+      if (prov && !get().modelLists[prov.id] && (!prov.needs_key || keys[prov.id])) void get().fetchModels(prov.id);
     },
 
     updateSettings(s) {
+      const before = get().settings;
       set({ settings: s });
       void bridge.settingsSet(SETTINGS_KEY, s);
+      // first visit of a provider, or a new server: load its models
+      const p = s.provider;
+      const prov = get().providers.find((x) => x.id === p);
+      const urlChanged = (before.baseUrls[p] ?? "") !== (s.baseUrls[p] ?? "");
+      if (prov && (urlChanged || (p !== before.provider && !get().modelLists[p])) && (!prov.needs_key || get().keys[p]))
+        void get().fetchModels(p);
+    },
+
+    async fetchModels(p) {
+      const st = get();
+      const api = useStore.getState().api;
+      const prov = st.providers.find((x) => x.id === p);
+      if (!api || !prov || st.modelsLoading[p] || useStore.getState().smokeAiDemo !== null) return;
+      set((s) => ({ modelsLoading: { ...s.modelsLoading, [p]: true }, modelsError: { ...s.modelsError, [p]: null } }));
+      try {
+        const models = await api.aiModels(p, prov.needs_key ? st.keys[p] ?? null : null, baseUrlFor(st.settings, prov) || null);
+        const modelLists = { ...get().modelLists, [p]: { models, fetched: new Date().toISOString() } };
+        set({ modelLists });
+        void bridge.settingsSet(MODELS_KEY, modelLists);
+      } catch (e) {
+        set((s) => ({ modelsError: { ...s.modelsError, [p]: (e as Error).message } }));
+      } finally {
+        set((s) => ({ modelsLoading: { ...s.modelsLoading, [p]: false } }));
+      }
     },
 
     async setApiKey(p, key) {
       const k = key.trim();
       if (!k) return;
       const r = await bridge.setSecret(secretName(p), k);
-      if (r.ok) set((s) => ({ keys: { ...s.keys, [p]: k }, keyPersisted: { ...s.keyPersisted, [p]: r.persisted } }));
+      if (r.ok) {
+        set((s) => ({ keys: { ...s.keys, [p]: k }, keyPersisted: { ...s.keyPersisted, [p]: r.persisted } }));
+        void get().fetchModels(p);
+      }
     },
 
     async removeApiKey(p) {

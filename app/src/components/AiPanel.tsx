@@ -3,9 +3,10 @@ import { Fragment, ReactNode, useEffect, useLayoutEffect, useRef, useState } fro
 import { useTranslation } from "react-i18next";
 import { currentProvider, useAi } from "../aiStore";
 import { ChatItem, inputPreview } from "../lib/aiChat";
-import { baseUrlFor, EFFORTS, missingSetting, modelFor, usesBaseUrl, usesEffort, withBaseUrl, withModel } from "../lib/aiSettings";
+import { baseUrlFor, EFFORTS, formatPrice, missingSetting, ModelInfo, modelFor, usesBaseUrl, usesEffort, withBaseUrl, withModel } from "../lib/aiSettings";
 import { useStore } from "../store";
 import { Icon } from "./Icons";
+import { SearchSelect } from "./SearchSelect";
 
 const SUGGESTIONS = ["s1", "s2", "s3", "s4", "s5"];
 
@@ -55,13 +56,21 @@ function AiSettingsForm() {
   const prov = currentProvider(ai);
   const [keyDraft, setKeyDraft] = useState("");
   const [replacing, setReplacing] = useState(false);
-  const [customModel, setCustomModel] = useState(false);
   if (!prov) return null;
   const s = ai.settings;
   const model = modelFor(s, prov);
-  const listed = prov.models?.length ? prov.models : null;
-  const showCustom = !listed || customModel || !listed.includes(model);
   const key = ai.keys[prov.id];
+  const fetched = ai.modelLists[prov.id]?.models;
+  // live list from the provider's API, else the built-in suggestions
+  const list: ModelInfo[] = fetched?.length ? fetched : (prov.models ?? []).map((id) => ({ id, name: id }));
+  const options = list.map((m) => {
+    const price = formatPrice(m);
+    const ctx = m.context ? `${Math.round(m.context / 1000)}k` : "";
+    return { value: m.id, label: m.name, detail: [price, ctx].filter(Boolean).join(" · ") || undefined };
+  });
+  const loading = !!ai.modelsLoading[prov.id];
+  const modelsError = ai.modelsError[prov.id];
+  const canFetch = !prov.needs_key || !!key;
 
   const saveKey = async () => {
     await ai.setApiKey(prov.id, keyDraft);
@@ -73,28 +82,30 @@ function AiSettingsForm() {
     <div className="ai-settings">
       <label className="field">
         <span>{t("ai.provider")}</span>
-        <select value={prov.id} onChange={(e) => { ai.updateSettings({ ...s, provider: e.target.value as typeof s.provider }); setReplacing(false); setCustomModel(false); }}>
+        <select value={prov.id} onChange={(e) => { ai.updateSettings({ ...s, provider: e.target.value as typeof s.provider }); setReplacing(false); }}>
           {ai.providers.map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}
         </select>
       </label>
-      <label className="field">
-        <span>{t("ai.model")}</span>
-        {listed && (
-          <select value={showCustom ? "__other" : model} onChange={(e) => {
-            if (e.target.value === "__other") setCustomModel(true);
-            else { setCustomModel(false); ai.updateSettings(withModel(s, prov.id, e.target.value)); }
-          }}>
-            {listed.map((m) => <option key={m} value={m}>{m}</option>)}
-            <option value="__other">{t("ai.modelOther")}</option>
-          </select>
-        )}
-        {showCustom && (
-          <input className="mono" placeholder={prov.default_model} defaultValue={listed && listed.includes(model) ? "" : s.models[prov.id] ?? ""}
-            aria-label={t("ai.modelCustom")}
-            onBlur={(e) => ai.updateSettings(withModel(s, prov.id, e.target.value))}
-            onKeyDown={(e) => { if (e.key === "Enter") (e.target as HTMLInputElement).blur(); }} />
-        )}
-      </label>
+      <div className="field">
+        <span className="row gap">
+          <span className="grow">{t("ai.model")}</span>
+          {fetched && <span className="muted small">{t("ai.modelsCount", { count: fetched.length })}</span>}
+        </span>
+        <div className="row gap">
+          <div className="grow" style={{ minWidth: 0 }}>
+            <SearchSelect value={model} options={options} placeholder={prov.default_model}
+              searchPlaceholder={t("ai.modelSearch")} emptyText={t("ai.modelNone")}
+              customLabel={(v) => t("ai.modelUse", { model: v })}
+              onChange={(v) => ai.updateSettings(withModel(s, prov.id, v))} />
+          </div>
+          <button className="icon-btn" title={canFetch ? t("ai.modelsReload") : t("ai.modelsNeedKey")} disabled={!canFetch || loading}
+            onClick={() => void ai.fetchModels(prov.id)}>
+            {loading ? <span className="mini-spin" /> : <Icon name="refresh" />}
+          </button>
+        </div>
+        {modelsError && <span className="small error-text">{t("ai.modelsError", { error: modelsError })}</span>}
+        {!fetched && !modelsError && !loading && <span className="muted small">{canFetch ? t("ai.modelsHint") : t("ai.modelsNeedKey")}</span>}
+      </div>
       {prov.needs_key && (
         <div className="field">
           <span>{t("ai.apiKey")}</span>

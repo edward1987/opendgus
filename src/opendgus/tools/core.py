@@ -548,29 +548,54 @@ def device_info(port: str, baud: int = 115200) -> dict:
         d.port.close()
 
 
+# Progress of the running device_upload, polled by the editor (GET /api/device/progress).
+# phase: idle | build | pause | write | reset | done | error; done/total in bytes (whole 32 KB blocks).
+UPLOAD_PROGRESS: dict = {"phase": "idle"}
+
+
 def device_upload(port: str, confirm: bool = False, baud: int = 115200) -> dict:
     """Build and upload the project to a display over UART (DWIN AllTool timing), then reset it.
     This overwrites the display's flash: only call with confirm=True after the user agreed."""
     if not confirm:
         raise ToolError("device_upload overwrites the display; ask the user, then call again with confirm=True")
-    p = SESSION.load()
-    r = compile_project(p, SESSION.require())
-    if not r.ok:
-        raise ToolError(f"build failed: {[str(i) for i in r.issues]}")
-    dl, d = _dev(port, baud)
-    log = []
+    import time
+    t0 = time.monotonic()
+
+    def status(phase: str, **kw) -> None:
+        global UPLOAD_PROGRESS
+        UPLOAD_PROGRESS = {**UPLOAD_PROGRESS, "phase": phase, "elapsed": round(time.monotonic() - t0, 1), **kw}
+
+    global UPLOAD_PROGRESS
+    UPLOAD_PROGRESS = {"phase": "build", "elapsed": 0.0, "done": 0, "total": 0, "file": None}
     try:
-        d.write_words(0x00FC, [0x55AA, 0x5AA5])
-        import time
-        time.sleep(2.0)
+        p = SESSION.load()
+        r = compile_project(p, SESSION.require())
+        if not r.ok:
+            raise ToolError(f"build failed: {[str(i) for i in r.issues]}")
+        dl, d = _dev(port, baud)
         order = sorted((f for f in r.files.items() if f[1]["slot"] is not None), key=lambda kv: -kv[1]["slot"])
-        for name, f in order:
-            data = (r.out_dir / name).read_bytes()
-            d.upload_slot(data, f["slot"], 6000, log=lambda *_: None)
-            log.append(f"{name} -> slot {f['slot']} ({len(data)} bytes)")
-        d.reset()
-    finally:
-        d.port.close()
+        blobs = [(name, f, (r.out_dir / name).read_bytes()) for name, f in order]
+        total = sum(-(-len(data) // dl.BLOCK_SIZE) * dl.BLOCK_SIZE for *_, data in blobs)
+        log = []
+        try:
+            status("pause", total=total)
+            d.write_words(0x00FC, [0x55AA, 0x5AA5])
+            time.sleep(2.0)
+            base = 0
+            for name, f, data in blobs:
+                status("write", file=name, done=base)
+                d.upload_slot(data, f["slot"], 6000, log=lambda *_: None,
+                              progress=lambda n, base=base, name=name: status("write", file=name, done=base + n))
+                base += -(-len(data) // dl.BLOCK_SIZE) * dl.BLOCK_SIZE
+                log.append(f"{name} -> slot {f['slot']} ({len(data)} bytes)")
+            status("reset", done=total, file=None)
+            d.reset()
+        finally:
+            d.port.close()
+    except Exception as e:
+        status("error", error=str(e))
+        raise
+    status("done")
     return {"uploaded": log, "note": "T5LCFG.CFG is only applied from an SD card"}
 
 

@@ -2,7 +2,7 @@
 // folder) and the request payload for /ws/ai. API keys are NOT part of these settings: they live encrypted in the
 // main process (safeStorage) under secretName(provider).
 
-export type ProviderId = "anthropic" | "openai" | "ollama";
+export type ProviderId = "anthropic" | "openai" | "openrouter" | "ollama";
 export type Effort = "low" | "medium" | "high" | "xhigh" | "max";
 
 export const EFFORTS: Effort[] = ["low", "medium", "high", "xhigh", "max"];
@@ -18,6 +18,41 @@ export interface AiProvider {
   base_url_hint?: string;
 }
 
+/** Entry of POST /api/ai/models; prices in USD per million tokens when the provider reports them. */
+export interface ModelInfo {
+  id: string;
+  name: string;
+  context?: number | null;
+  input?: number | null;
+  output?: number | null;
+}
+
+/** Model lists fetched from the providers, remembered between runs (settings key MODELS_KEY). */
+export type ModelLists = Partial<Record<ProviderId, { models: ModelInfo[]; fetched: string }>>;
+export const MODELS_KEY = "ai.models";
+
+export function normalizeModelLists(raw: unknown): ModelLists {
+  const out: ModelLists = {};
+  if (!raw || typeof raw !== "object") return out;
+  for (const [k, v] of Object.entries(raw as Record<string, unknown>)) {
+    const models = (v as { models?: unknown })?.models;
+    if (!isProvider(k) || !Array.isArray(models)) continue;
+    out[k] = {
+      models: models.filter((m): m is ModelInfo => !!m && typeof m === "object" && typeof (m as ModelInfo).id === "string"),
+      fetched: String((v as { fetched?: unknown }).fetched ?? ""),
+    };
+  }
+  return out;
+}
+
+/** "$3 / $15" per million tokens (input / output), "free", or "" when unknown. */
+export function formatPrice(m: ModelInfo): string {
+  if (m.input == null && m.output == null) return "";
+  if (!m.input && !m.output) return "free";
+  const f = (x: number | null | undefined) => (x == null ? "?" : `$${x < 1 ? +x.toFixed(3) : +x.toFixed(2)}`);
+  return `${f(m.input)} / ${f(m.output)}`;
+}
+
 export interface AiSettings {
   provider: ProviderId;
   /** model per provider (empty = the provider's default) */
@@ -29,7 +64,7 @@ export interface AiSettings {
 
 export const DEFAULT_SETTINGS: AiSettings = { provider: "anthropic", models: {}, baseUrls: {}, effort: "medium" };
 
-const PROVIDER_IDS: ProviderId[] = ["anthropic", "openai", "ollama"];
+const PROVIDER_IDS: ProviderId[] = ["anthropic", "openai", "openrouter", "ollama"];
 const isProvider = (v: unknown): v is ProviderId => typeof v === "string" && (PROVIDER_IDS as string[]).includes(v);
 
 function cleanMap(v: unknown): Partial<Record<ProviderId, string>> {
@@ -54,7 +89,7 @@ export function normalizeSettings(raw: unknown): AiSettings {
 /** Name under which the provider's API key is kept in the encrypted secret store. */
 export const secretName = (p: ProviderId) => `ai.apiKey.${p}`;
 
-export const usesBaseUrl = (p: ProviderId) => p === "openai" || p === "ollama";
+export const usesBaseUrl = (p: ProviderId) => p === "openai" || p === "openrouter" || p === "ollama";
 export const usesEffort = (p: ProviderId) => p === "anthropic";
 
 /** Prefill for the base-URL box: the first URL found in the provider's hint ("https://... (or ...)"). */

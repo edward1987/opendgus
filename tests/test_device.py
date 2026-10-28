@@ -102,6 +102,14 @@ class UploadTests(unittest.TestCase):
     def test_upload_multiblock_crc(self):
         self.check_upload(True, 3 * dl.BLOCK_SIZE + 123, 14)
 
+    def test_upload_progress(self):
+        d = dl.Dgus(FakeScreen(), timeout=1)
+        seen = []
+        d.upload_slot(os.urandom(dl.BLOCK_SIZE + 10), 32, log=lambda *_: None, progress=seen.append)
+        self.assertEqual(seen, sorted(seen))
+        self.assertEqual(seen[-1], 2 * dl.BLOCK_SIZE)
+        self.assertIn(dl.BLOCK_SIZE, seen)                  # block 1 ends exactly at 32 KB
+
     def test_flash_read_roundtrip(self):
         scr = FakeScreen(crc=True)
         d = dl.Dgus(scr, crc=True)

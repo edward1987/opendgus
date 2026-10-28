@@ -348,6 +348,14 @@
     "provider": "Provider",
     "model": "Model",
     "modelOther": "Other…",
+    "modelSearch": "Search models…",
+    "modelNone": "No model matches",
+    "modelUse": "Use \"{{model}}\"",
+    "modelsCount": "{{count}} models",
+    "modelsReload": "Reload the model list from the provider",
+    "modelsNeedKey": "Add the API key to load the model list",
+    "modelsHint": "Click reload to fetch the model list",
+    "modelsError": "Could not load models: {{error}}",
     "modelCustom": "Model id",
     "apiKey": "API key",
     "apiKeySaved": "Saved, encrypted by the OS",
@@ -409,7 +417,17 @@
     "confirm": "I understand, overwrite the display",
     "upload": "Build & upload",
     "uploading": "Uploading… this can take a minute",
-    "uploaded": "Upload finished"
+    "uploaded": "Upload finished",
+    "remaining": "{{time}} left",
+    "phase": {
+      "idle": "Starting…",
+      "build": "Building the project…",
+      "pause": "Pausing the display…",
+      "write": "Writing {{file}}",
+      "reset": "Resetting the display…",
+      "done": "Done",
+      "error": "Failed"
+    }
   },
   "theme": {
     "title": "Theme",

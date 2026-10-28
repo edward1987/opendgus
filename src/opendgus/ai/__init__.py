@@ -25,6 +25,11 @@ def run(session: ChatSession, user_text: str, emit: Emit, *, provider: str = "an
         elif provider == "openai":
             from . import openai_provider as P
             P.chat(session, user_text, emit, api_key=api_key, model=model or "gpt-4.1", base_url=base_url)
+        elif provider == "openrouter":
+            from . import openai_provider as P
+            from .models import OPENROUTER_URL
+            P.chat(session, user_text, emit, api_key=api_key, model=model or "anthropic/claude-sonnet-5.5",
+                   base_url=base_url or OPENROUTER_URL)
         elif provider == "ollama":
             from . import openai_provider as P
             P.ollama_chat(session, user_text, emit, model=model or "qwen2.5:14b", base_url=base_url)
@@ -57,7 +62,9 @@ PROVIDERS = [
     {"id": "anthropic", "name": "Claude (Anthropic)", "default_model": "claude-opus-5-5", "needs_key": True,
      "models": ["claude-opus-5-5", "claude-sonnet-5-5", "claude-haiku-5-5", "claude-fable-5-1"]},
     {"id": "openai", "name": "OpenAI-compatible", "default_model": "gpt-4.1", "needs_key": True,
-     "base_url_hint": "https://api.openai.com/v1 (or OpenRouter, LM Studio, vLLM...)"},
+     "base_url_hint": "https://api.openai.com/v1 (or LM Studio, vLLM...)"},
+    {"id": "openrouter", "name": "OpenRouter", "default_model": "anthropic/claude-sonnet-5.5", "needs_key": True,
+     "base_url_hint": "https://openrouter.ai/api/v1"},
     {"id": "ollama", "name": "Ollama (local)", "default_model": "qwen2.5:14b", "needs_key": False,
      "base_url_hint": "http://localhost:11434/v1"},
 ]

@@ -1,6 +1,6 @@
 import { Fragment, useEffect, useState } from "react";
 import { useTranslation } from "react-i18next";
-import { bridge } from "../lib/api";
+import { bridge, type UploadProgress } from "../lib/api";
 import { findItem } from "../lib/project";
 import { useStore } from "../store";
 import { Icon } from "./Icons";
@@ -148,6 +148,34 @@ export function BuildDialog({ onClose }: { onClose: () => void }) {
   );
 }
 
+function UploadBar({ p }: { p: UploadProgress | null }) {
+  const { t } = useTranslation();
+  const phase = p?.phase ?? "build";
+  const total = p?.total ?? 0;
+  const done = p?.done ?? 0;
+  const frac = total ? Math.min(1, done / total) : 0;
+  // ETA from the write rate so far (the 2 s pause before writing is excluded by measuring from the first byte)
+  const [start, setStart] = useState<{ t: number; done: number } | null>(null);
+  useEffect(() => { if (phase === "write" && !start && p?.elapsed != null) setStart({ t: p.elapsed, done }); }, [phase, p?.elapsed]);
+  let eta: number | null = null;
+  if (phase === "write" && start && p?.elapsed != null && done > start.done) {
+    eta = ((total - done) * (p.elapsed - start.t)) / (done - start.done);
+  }
+  const fmt = (s: number) => `${Math.floor(s / 60)}:${String(Math.round(s % 60)).padStart(2, "0")}`;
+  return (
+    <div className="upload-progress">
+      <div className="upload-bar"><div style={{ width: `${(phase === "reset" || phase === "done" ? 1 : frac) * 100}%` }} /></div>
+      <div className="row gap small muted">
+        <span className="grow">
+          {t(`device.phase.${phase}`, { file: p?.file ?? "" })}
+          {phase === "write" && total > 0 && ` · ${Math.round(done / 1024)} / ${Math.round(total / 1024)} KB`}
+        </span>
+        <span>{Math.round(frac * 100)}%{eta != null && ` · ${t("device.remaining", { time: fmt(eta) })}`}</span>
+      </div>
+    </div>
+  );
+}
+
 export function DeviceDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
   const api = useStore((s) => s.api)!;
@@ -160,6 +188,7 @@ export function DeviceDialog({ onClose }: { onClose: () => void }) {
   const [err, setErr] = useState<string | null>(null);
   const [confirm, setConfirm] = useState(false);
   const [result, setResult] = useState<{ uploaded: string[]; note?: string } | null>(null);
+  const [progress, setProgress] = useState<UploadProgress | null>(null);
 
   const refresh = () => {
     setPorts(null);
@@ -175,12 +204,18 @@ export function DeviceDialog({ onClose }: { onClose: () => void }) {
     setBusy(null);
   };
   const upload = async () => {
-    setBusy("upload"); setErr(null); setResult(null);
+    setBusy("upload"); setErr(null); setResult(null); setProgress(null);
+    // skip finished states: before the backend starts, the endpoint still reports the previous upload
+    const timer = setInterval(() => {
+      api.uploadProgress().then((pr) => { if (!["idle", "done", "error"].includes(pr.phase)) setProgress(pr); }).catch(() => undefined);
+    }, 500);
     try {
       await useStore.getState().flushSave();
       setResult(await api.tool("device_upload", { port, baud, confirm: true }));
       setConfirm(false);
     } catch (e) { setErr(errText(e)); }
+    clearInterval(timer);
+    setProgress(null);
     setBusy(null);
   };
 
@@ -223,6 +258,7 @@ export function DeviceDialog({ onClose }: { onClose: () => void }) {
           <button className="btn danger" disabled={!port || !confirm || !!busy} onClick={upload}>
             <Icon name="upload" /> {busy === "upload" ? t("device.uploading") : t("device.upload")}
           </button>
+          {busy === "upload" && <UploadBar p={progress} />}
         </div>
         {err && <div className="alert error">{err}</div>}
         {result && (
