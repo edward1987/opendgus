@@ -13,6 +13,7 @@ export type FieldKind =
   | "union"
   | "array"
   | "colorList"
+  | "stringList"
   | "intList"
   | "json";
 
@@ -163,7 +164,7 @@ export function fieldFromSchema(key: string, raw: JsonSchema, required: boolean,
     case "array": {
       const item = s.items ? unwrapNullable(s.items, root).schema : {};
       if (item.type === "integer" || item.type === "number") return { ...base, kind: "intList" };
-      if (item.type === "string") return { ...base, kind: COLOR_KEY.test(key) || key === "gradient" ? "colorList" : "json" };
+      if (item.type === "string") return { ...base, kind: COLOR_KEY.test(key) || key === "gradient" ? "colorList" : "stringList" };
       if (item.type === "object" || item.properties)
         return {
           ...base,

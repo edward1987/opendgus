@@ -102,6 +102,36 @@ export interface Project {
   pages: Page[];
   screensaver?: Screensaver;
   controller?: { board: string | null; mqtt: boolean };
+  presets?: Preset[];
+  board_profiles?: BoardProfile[];
+}
+
+export interface BoardProfile {
+  id: string;
+  title: string;
+  lang: "arduino" | "micropython" | "python";
+  wiring: [string, string][];
+  serial_setup: string;
+  serial_decl: string;
+  port_expr: string;
+  fqbn: string;
+  core: string;
+  core_url: string;
+  wifi: boolean;
+  led: string;
+  pwm: string;
+  adc: string;
+  max_baud: number;
+  notes: string[];
+}
+
+export interface Preset {
+  name: string;
+  width: number;
+  height: number;
+  elements: Element[];
+  controls: Control[];
+  variables: Variable[];
 }
 
 export interface WidgetInfo {
@@ -111,6 +141,8 @@ export interface WidgetInfo {
   description: string;
   needs_var: boolean;
   verified: string;
+  var_types?: string[];
+  runtime_input?: string;
   props: JsonSchema;
 }
 

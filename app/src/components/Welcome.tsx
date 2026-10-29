@@ -18,6 +18,7 @@ export function Welcome() {
   const [recent, setRecent] = useState<Recent[]>([]);
   const [wizard, setWizard] = useState(false);
   const [busy, setBusy] = useState(false);
+  const [legacyReport, setLegacyReport] = useState<{ folder: string; pages: number; controls: number; issues: string[] } | null>(null);
   const openProject = useStore((s) => s.openProject);
   const toast = useStore((s) => s.toast);
 
@@ -46,6 +47,21 @@ export function Welcome() {
     if (f) await open(f);
   };
 
+  const importLegacy = async () => {
+    const source = await bridge.openFolder({ title: t("welcome.legacySource") });
+    if (!source) return;
+    const destination = await bridge.openFolder({ title: t("welcome.legacyDestination"), create: true });
+    if (!destination) return;
+    setBusy(true);
+    try {
+      const result = await useStore.getState().api!.tool<{ folder: string; pages: number; controls: number; issues: string[] }>(
+        "import_legacy_project", { source, destination });
+      setLegacyReport(result);
+    } catch (e) {
+      toast(t("welcome.importFailed", { error: (e as Error).message }), "error");
+    } finally { setBusy(false); }
+  };
+
   return (
     <div className="welcome">
       <div className="welcome-top">
@@ -65,6 +81,9 @@ export function Welcome() {
             </button>
             <button className="btn lg" onClick={browse} disabled={busy}>
               <Icon name="folder" /> {t("welcome.open")}
+            </button>
+            <button className="btn lg" onClick={() => void importLegacy()} disabled={busy}>
+              <Icon name="upload" /> {t("welcome.importLegacy")}
             </button>
           </div>
           <ul className="feature-list">
@@ -91,6 +110,12 @@ export function Welcome() {
         </section>
       </div>
       {wizard && <NewProjectWizard onClose={() => setWizard(false)} />}
+      {legacyReport && <Modal title={t("welcome.importReport")} onClose={() => setLegacyReport(null)} width={640}
+        footer={<button className="btn primary" onClick={() => { const folder = legacyReport.folder; setLegacyReport(null); void open(folder); }}>
+          {t("welcome.openImported")}</button>}>
+        <p>{t("welcome.importSummary", { pages: legacyReport.pages, controls: legacyReport.controls })}</p>
+        {legacyReport.issues.length > 0 && <ul className="issue-list">{legacyReport.issues.map((issue, i) => <li key={i} className="issue warning">{issue}</li>)}</ul>}
+      </Modal>}
     </div>
   );
 }

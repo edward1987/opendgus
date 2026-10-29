@@ -1,5 +1,5 @@
 import { describe, expect, it } from "vitest";
-import { allocateVps, arrangeItems, bbox, duplicateItems, Item, moveBy, nextId, reorderItem, withBox } from "./project";
+import { allocateVps, arrangeItems, bbox, duplicateItems, insertPreset, Item, makePreset, moveBy, nextId, reorderItem, withBox } from "./project";
 import type { Project, Variable } from "./types";
 
 const v = (name: string, type: Variable["type"] = "int16", vp: number | null = null, length = 16): Variable =>
@@ -42,6 +42,18 @@ describe("project helpers", () => {
     const [p, ids] = duplicateItems(project(), ["c3"]);
     expect(ids).toEqual(["c4"]);
     expect(p.pages[0].controls[1]).toMatchObject({ id: "c4", x: 116, y: 116 });
+  });
+
+  it("reuses a control group with independent variables", () => {
+    const p = project();
+    p.variables = [v("mode")];
+    p.pages[0].controls[0].var = "mode";
+    const preset = makePreset(p, ["e1", "c3"], "Mode control");
+    const [next, ids] = insertPreset(p, 0, preset, { x: 400, y: 240 });
+    expect(ids).toHaveLength(2);
+    expect(next.variables.map((variable) => variable.name)).toEqual(["mode", "mode1"]);
+    expect(next.pages[0].controls.at(-1)?.var).toBe("mode1");
+    expect(next.pages[0].controls.at(-1)?.id).not.toBe("c3");
   });
 
   it("reorders within the item's own list", () => {

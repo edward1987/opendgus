@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { bridge } from "../lib/api";
+import type { BoardProfile } from "../lib/types";
 import { useStore } from "../store";
 import { Switch } from "./fields";
 import { Icon } from "./Icons";
 import { Modal } from "./Modal";
 
-interface BoardInfo { id: string; title: string; language: "arduino" | "micropython" | "python"; network: boolean; max_baud: number; wiring: string[] }
+interface BoardInfo { id: string; title: string; language: "arduino" | "micropython" | "python"; network: boolean; max_baud: number; wiring: string[]; profile: BoardProfile; custom: boolean }
 interface SampleInfo { id: string; title: string; description: string; wifi: boolean }
 interface GenResult { folder: string; board: string; main: string; files: string[]; changed: string[]; regions: string[]; warnings: string[] }
 interface FileResult { path: string; content: string; regions: string[]; files: string[] }
@@ -71,7 +72,31 @@ function CodeTab() {
   const [ports, setPorts] = useState<{ port: string; description: string }[]>([]);
   const [port, setPort] = useState("");
   const [copied, setCopied] = useState(false);
-  const info = boards.find((b) => b.id === board);
+  const [draft, setDraft] = useState<BoardProfile | null>(null);
+  const customBoards: BoardInfo[] = (project.board_profiles ?? []).map((p) => ({
+    id: p.id, title: p.title, language: p.lang, network: p.wifi, max_baud: p.max_baud,
+    wiring: p.wiring.map(([d, pin]) => `display ${d} -> ${pin}`), profile: p, custom: true,
+  }));
+  const allBoards = [...boards.filter((b) => !b.custom), ...customBoards];
+  const info = allBoards.find((b) => b.id === board);
+  const savedProfile = (project.board_profiles ?? []).find((p) => p.id === board);
+  const dirtyBoard = !!draft && !!savedProfile && JSON.stringify(draft) !== JSON.stringify(savedProfile);
+
+  useEffect(() => { setDraft((project.board_profiles ?? []).find((p) => p.id === board) ?? null); }, [board]);
+  const cloneBoard = () => {
+    if (!info) return;
+    const base = info.title.toLowerCase().replace(/[^a-z0-9]+/g, "_").replace(/^_|_$/g, "") || "board";
+    let id = `custom_${base}`, i = 2;
+    while (allBoards.some((b) => b.id === id)) id = `custom_${base}_${i++}`;
+    const profile = { ...structuredClone(info.profile), id, title: `${info.title} custom` };
+    st().commit({ ...st().project!, board_profiles: [...(st().project!.board_profiles ?? []), profile] });
+    setBoard(id);
+    setDraft(profile);
+  };
+  const saveBoard = () => {
+    if (!draft) return;
+    st().commit({ ...st().project!, board_profiles: (st().project!.board_profiles ?? []).map((p) => p.id === draft.id ? draft : p) });
+  };
 
   const refreshPorts = () => void api.tool<{ port: string; description: string }[]>("list_serial_ports").then((p) => {
     setPorts(p);
@@ -116,12 +141,13 @@ function CodeTab() {
   return (
     <div className="ctl">
       <div className="ctl-top">
-        <label className="ctl-field"><span>{t("controller.board")}</span><BoardSelect boards={boards} value={board} onChange={setBoard} /></label>
+        <label className="ctl-field"><span>{t("controller.board")}</span><BoardSelect boards={allBoards} value={board} onChange={setBoard} /></label>
+        {info && <button className="btn sm" onClick={cloneBoard}>{t("controller.cloneProfile")}</button>}
         {info?.network && (
           <label className="ctl-field row gap-sm" title={t("controller.mqttHint")}><Switch checked={mqtt} onChange={setMqtt} /> {t("controller.mqtt")}</label>
         )}
         <span className="spacer" />
-        <button className="btn primary" disabled={!board || busy !== null} onClick={() => void generate()}>
+        <button className="btn primary" disabled={!board || busy !== null || dirtyBoard} onClick={() => void generate()}>
           <Icon name="refresh" size={14} /> {file ? t("controller.regenerate") : t("controller.generate")}
         </button>
         {folder && <button className="btn" onClick={() => void bridge.openPath(folder)}><Icon name="folder" size={14} /> {t("controller.openFolder")}</button>}
@@ -144,6 +170,24 @@ function CodeTab() {
           )}
         </div>
       )}
+      {draft && <div className="ctl-info">
+        <div className="ctl-field"><span>{t("controller.profileName")}</span><input value={draft.title} onChange={(e) => setDraft({ ...draft, title: e.target.value })} /></div>
+        {draft.lang === "arduino" && <>
+          <div className="ctl-field"><span>FQBN</span><input value={draft.fqbn} onChange={(e) => setDraft({ ...draft, fqbn: e.target.value })} /></div>
+          <div className="ctl-field"><span>Core</span><input value={draft.core} onChange={(e) => setDraft({ ...draft, core: e.target.value })} /></div>
+          <div className="ctl-field"><span>Core URL</span><input value={draft.core_url} onChange={(e) => setDraft({ ...draft, core_url: e.target.value })} /></div>
+        </>}
+        <div className="ctl-field"><span>{t("controller.serialPort")}</span><input value={draft.port_expr} onChange={(e) => setDraft({ ...draft, port_expr: e.target.value })} /></div>
+        <div className="ctl-field"><span>{t("controller.maxBaud")}</span><input type="number" min={9600} max={921600} value={draft.max_baud} onChange={(e) => setDraft({ ...draft, max_baud: Number(e.target.value) })} /></div>
+        <div className="ctl-field"><span>{t("controller.serialDecl")}</span><textarea value={draft.serial_decl} onChange={(e) => setDraft({ ...draft, serial_decl: e.target.value })} /></div>
+        <div className="ctl-field"><span>{t("controller.serialSetup")}</span><textarea value={draft.serial_setup} onChange={(e) => setDraft({ ...draft, serial_setup: e.target.value })} /></div>
+        <div className="ctl-field"><span>{t("controller.wiring")}</span><textarea value={draft.wiring.map(([d, pin]) => `${d} => ${pin}`).join("\n")}
+          onChange={(e) => setDraft({ ...draft, wiring: e.target.value.split("\n").filter(Boolean).map((line) => {
+            const [d, ...pin] = line.split("=>"); return [d.trim(), pin.join("=>").trim()];
+          }) })} /></div>
+        <button className="btn sm primary" disabled={!draft.title.trim() || (draft.lang === "arduino" && !draft.fqbn.trim()) || draft.max_baud < 9600}
+          onClick={saveBoard}>{t("controller.saveProfile")}</button>
+      </div>}
       {gen && <p className="muted small">{t("controller.generated", { count: gen.changed.length })} {t("controller.userCode")}</p>}
       {err && <pre className="error-pre">{err}</pre>}
 

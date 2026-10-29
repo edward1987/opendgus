@@ -48,7 +48,7 @@ function usePick(onClose: () => void) {
 
 export function ValidateDialog({ onClose }: { onClose: () => void }) {
   const { t } = useTranslation();
-  const [res, setRes] = useState<{ ok: boolean; issues: string[]; pages: number[]; icons: number } | null>(null);
+  const [res, setRes] = useState<{ ok: boolean; issues: string[]; pages: number[]; icons: number; flash_used_bytes: number; flash_capacity_bytes: number } | null>(null);
   const [err, setErr] = useState<string | null>(null);
   const pick = usePick(onClose);
   useEffect(() => {
@@ -66,6 +66,9 @@ export function ValidateDialog({ onClose }: { onClose: () => void }) {
             <span className={`chip ${res.ok ? "ok" : "bad"}`}>{res.ok ? t("validate.ok") : t("validate.failed")}</span>
             <span className="chip">{t("validate.pages", { count: res.pages.length })}</span>
             <span className="chip">{t("validate.icons", { count: res.icons })}</span>
+            {res.flash_used_bytes > 0 && <span className="chip">{t("validate.flash", {
+              used: (res.flash_used_bytes / 1048576).toFixed(2), total: (res.flash_capacity_bytes / 1048576).toFixed(0),
+            })}</span>}
           </div>
           <IssueList issues={res.issues} onPick={pick} />
         </>

@@ -1,5 +1,5 @@
 // Pure helpers over the project model: item lookup, ids, bounding boxes, moves, VP allocation, alignment.
-import type { Box, Control, Element, LineElement, Page, Project, Variable } from "./types";
+import type { Box, Control, Element, LineElement, Page, Preset, Project, Variable } from "./types";
 
 export type Item = Element | Control;
 
@@ -107,6 +107,49 @@ export function duplicateItems(project: Project, ids: string[], offset = 16): [P
       f.kind === "control" ? { ...pg, controls: [...pg.controls, copy as Control] } : { ...pg, elements: [...pg.elements, copy as Element] });
   }
   return [p, newIds];
+}
+
+/** Save selected items as a movable group, including the variables they use. */
+export function makePreset(project: Project, ids: string[], name: string): Preset {
+  const picked = ids.map((id) => findItem(project, id)?.item).filter((it): it is Item => !!it);
+  if (!picked.length) throw new Error("Select at least one item");
+  const boxes = picked.map(bbox);
+  const x = Math.min(...boxes.map((b) => b.x)), y = Math.min(...boxes.map((b) => b.y));
+  const width = Math.max(...boxes.map((b) => b.x + b.w)) - x;
+  const height = Math.max(...boxes.map((b) => b.y + b.h)) - y;
+  const items = picked.map((it) => moveBy(structuredClone(it), -x, -y));
+  const vars = new Set(items.filter(isControl).map((c) => c.var).filter((v): v is string => !!v));
+  return { name: name.trim(), width, height,
+    elements: items.filter((it) => !isControl(it)) as Element[],
+    controls: items.filter(isControl) as Control[],
+    variables: project.variables.filter((v) => vars.has(v.name)).map((v) => ({ ...v, vp: null })),
+  };
+}
+
+/** Insert a preset with independent variable names and fresh item IDs. */
+export function insertPreset(project: Project, pageId: number, preset: Preset, centre: { x: number; y: number }): [Project, string[]] {
+  let next = project;
+  const names = new Map<string, string>();
+  for (const v of preset.variables) {
+    const name = uniqueVarName(next, v.name);
+    names.set(v.name, name);
+    next = { ...next, variables: [...next.variables, { ...structuredClone(v), name, vp: null }] };
+  }
+  const dx = Math.max(0, Math.min(project.display.width - preset.width, Math.round(centre.x - preset.width / 2)));
+  const dy = Math.max(0, Math.min(project.display.height - preset.height, Math.round(centre.y - preset.height / 2)));
+  const ids: string[] = [];
+  for (const item of [...preset.elements, ...preset.controls]) {
+    const copy = moveBy(structuredClone(item), dx, dy);
+    copy.id = nextId(next, isControl(copy) ? "c" : "e");
+    ids.push(copy.id);
+    if (isControl(copy)) {
+      copy.var = copy.var ? names.get(copy.var) ?? copy.var : null;
+    }
+    next = updatePage(next, pageId, (pg) => isControl(copy)
+      ? { ...pg, controls: [...pg.controls, copy as Control] }
+      : { ...pg, elements: [...pg.elements, copy as Element] });
+  }
+  return [next, ids];
 }
 
 /** Move an item within its own list (z-order). dir +1 = towards front. */

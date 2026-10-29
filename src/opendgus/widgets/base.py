@@ -36,6 +36,7 @@ class Widget:
     var_types: ClassVar[tuple[str, ...]] = ("int16", "uint16", "int32", "uint32")
     has_press_effect: ClassVar[bool] = False
     verified: ClassVar[str] = "hardware"         # weakest verification of the primitives it uses
+    runtime_input: ClassVar[str] = ""           # when the controller must supply data beyond ordinary VP writes
     props_model: ClassVar[Type[Props]] = Props
 
     def props(self, c: Control) -> Props:
@@ -51,10 +52,13 @@ class Widget:
     def schema(cls) -> dict:
         return {"type": cls.key, "title": cls.title, "category": cls.category, "description": cls.doc,
                 "needs_var": cls.needs_var, "verified": cls.verified,
+                "var_types": list(cls.var_types), "runtime_input": cls.runtime_input,
                 "props": cls.props_model.model_json_schema()}
 
 
 WIDGETS: dict[str, Type[Widget]] = {}
+PLUGIN_ERRORS: dict[str, str] = {}
+PLUGIN_API_VERSION = 1
 
 
 def widget(cls: Type[Widget]) -> Type[Widget]:
@@ -64,8 +68,26 @@ def widget(cls: Type[Widget]) -> Type[Widget]:
 
 def get(key: str) -> Widget:
     if key not in WIDGETS:
-        raise KeyError(f"unknown widget {key!r}; available: {sorted(WIDGETS)} or 'raw:<spec>'")
+        raise KeyError(f"unknown widget {key!r}; install its OpenDGUS plugin or use 'raw:<spec>'")
     return WIDGETS[key]()
+
+
+def load_plugins() -> None:
+    """Load user-installed widget entry points; installing a package is the opt-in step."""
+    from importlib.metadata import entry_points
+
+    for ep in entry_points(group="opendgus.widgets.v1"):
+        try:
+            cls = ep.load()
+            if not isinstance(cls, type) or not issubclass(cls, Widget):
+                raise TypeError("entry point must return a Widget subclass")
+            if not cls.key or cls.key.startswith("raw:") or cls.key in WIDGETS:
+                raise ValueError(f"widget key {cls.key!r} is empty, reserved, or already registered")
+            if not issubclass(cls.props_model, Props):
+                raise TypeError("props_model must be a Props subclass")
+            WIDGETS[cls.key] = cls
+        except Exception as exc:
+            PLUGIN_ERRORS[ep.name] = str(exc)
 
 
 def touch_area(c: Control) -> dict:

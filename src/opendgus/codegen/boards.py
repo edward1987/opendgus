@@ -107,6 +107,23 @@ BOARDS: dict[str, Board] = {b.id: b for b in [
           led="None", wiring=[("TX", "adapter RX"), ("RX", "adapter TX"), ("GND", "adapter GND"), _DISPLAY_POWER],
           notes=["pip install pyserial. PORT is e.g. COM3 on Windows or /dev/ttyUSB0 on Linux.", _LEVEL]),
 ]}
+BUILTIN_BOARD_IDS = frozenset(BOARDS)
+_CUSTOM_BOARD_IDS: set[str] = set()
+
+
+def configure_custom_boards(project) -> None:
+    """Replace custom board definitions for the currently open project."""
+    for key in _CUSTOM_BOARD_IDS:
+        BOARDS.pop(key, None)
+    _CUSTOM_BOARD_IDS.clear()
+    for profile in project.board_profiles:
+        if profile.id in BUILTIN_BOARD_IDS or profile.id in _CUSTOM_BOARD_IDS:
+            raise ValueError(f"duplicate board profile {profile.id!r}")
+        if profile.lang == "arduino" and not profile.fqbn:
+            raise ValueError(f"Arduino board profile {profile.id!r} needs an FQBN")
+        board = Board(**profile.model_dump())
+        BOARDS[board.id] = board
+        _CUSTOM_BOARD_IDS.add(board.id)
 
 
 def get(board_id: str) -> Board:

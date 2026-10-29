@@ -26,6 +26,7 @@ dependencies = [
   "uvicorn[standard]>=0.30",
   "anthropic>=2.3",
   "openai>=1.40",
+  "qrcode>=8.0",
 ]
 
 [project.optional-dependencies]

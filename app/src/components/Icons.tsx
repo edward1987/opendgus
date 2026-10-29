@@ -82,5 +82,6 @@ export function Icon({ name, size = 16, ...rest }: { name: IconName | string; si
 
 export const WIDGET_ICON: Record<string, IconName> = {
   button: "button", toggle: "toggle", number: "number", progress: "progress", indicator: "indicator", slider: "slider",
+  live_text: "text", clock: "number", qr: "shapes", choice: "button", curve: "progress",
   rect: "rect", ellipse: "ellipse", line: "line", text: "text", icon: "star", image: "image",
 };

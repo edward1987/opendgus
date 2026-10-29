@@ -29,26 +29,28 @@ visually (or ask an AI to), try them in an emulator, and flash them to the displ
 
 | | |
 |---|---|
-| 🎨 **Visual editor** | Drag-and-drop pages, cards, text and icons, plus smart widgets: buttons, toggles, numbers, sliders, gauges, progress rings, indicators. The preview is pixel-exact. |
+| 🎨 **Visual editor** | Drag-and-drop pages, text, images and controls. Save a selection as a reusable project preset. New live text, clock, QR, choice and curve controls expose more DGUS features without raw records. |
 | ✨ **AI designer** | Describe the screen and the AI builds it, sees its own renders, and fixes what looks wrong. Works with Claude, OpenRouter, any OpenAI-compatible API, or local Ollama. |
 | ▶️ **Emulator** | Click through your UI on the desktop, change variables like your MCU would, and watch the UART frames it sends, before you flash anything. |
 | ⚡ **One-click upload** | Flash over the USB/UART adapter with a live progress bar, or export to a microSD card. Uses the exact timing of DWIN's own downloader. |
 | 🖥️ **Any display** | 26 built-in DWIN models, part-number decoding (`DMG10600C070_03WTC` → 1024×600, 7", capacitive, 16 MB), or any custom resolution, in landscape or portrait. |
-| 📐 **20 templates** | Responsive starting points that adapt to any resolution (see below). |
-| 🔌 **Controller code** | Writes the program for the board that drives the display: Arduino (Nano, Uno, Mega, Pico, ESP32), MicroPython (Pico 2 W, ESP32) or Python (Raspberry Pi, PC), with an optional Home Assistant (MQTT) bridge. Compiles and uploads it too, or asks the AI to write the logic. |
+| 📐 **22 templates** | Responsive starting points that adapt to any resolution, including a universal control panel and status dashboard (see below). |
+| 🔌 **Controller code** | Generates Arduino, MicroPython and Python controller programs. Clone and edit an Arduino board profile for a board outside the built-in list. |
+| 📥 **Legacy project import** | Bring in page backgrounds and compatible compiled controls from a DGUS V7.651 project, with an import report for items that need review. |
 | 🌙 **Auto-dim & screensaver** | Dim to 10 % after a minute without a touch, and show a picture or animated GIF when idle. Ideal for wall-mounted home panels. |
 | 🧰 **All 47 DGUS II controls** | For experts: every native control, byte-checked against the DGUS editor's own code. |
 | 🌍 **English + Romanian** | Fully translated UI. |
 
 ## Templates
 
-Twenty templates, each one responsive: pick any resolution and the layout adapts.
+Twenty-two templates, each one responsive: pick any resolution and the layout adapts.
 
 <img src="docs/images/templates.png" alt="Template gallery" width="100%">
 
 Home control · thermostat · industrial HMI · 3D printer · EV charger · coffee machine · music player ·
 car dashboard · washing machine · vitals monitor · greenhouse · access control · weather station · solar monitor ·
 elevator panel · PIN keypad · alarm panel · queue display · order kiosk · settings pages.
+Universal panel · status dashboard.
 Details: [docs/reference/templates.md](docs/reference/templates.md).
 
 ## AI designer
@@ -120,7 +122,7 @@ project.json ─► compiler ─► DWIN_SET/ ─► SD card or UART ─► disp
                     └─► vars.h + manifest.json for your MCU
 ```
 
-Everything was reverse-engineered from the official tools and verified on a real display; the notes are in
+Core build and touch behavior was reverse-engineered from the official tools and checked on a real display. New controls such as QR, clock, choice and curve follow the vendor encoder and still need hardware checks; the notes are in
 [`docs/re/`](docs/re/). OpenDGUS contains no DWIN code.
 
 ## Command line

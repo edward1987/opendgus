@@ -17,11 +17,11 @@ import re
 from pathlib import Path
 from typing import Any, Literal, Optional, Union
 
-from pydantic import BaseModel, ConfigDict, Field, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 from .profiles import PROFILES, custom, decode_part_number
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2
 COLOR_RE = re.compile(r"^#[0-9a-fA-F]{6}$")
 
 
@@ -233,6 +233,36 @@ class Controller(_M):
     mqtt: bool = Field(False, description="Wi-Fi/network boards: MQTT + Home Assistant discovery")
 
 
+class Preset(_M):
+    """Reusable group with coordinates relative to its top-left corner."""
+    name: str = Field(..., min_length=1)
+    width: int = Field(..., ge=1)
+    height: int = Field(..., ge=1)
+    elements: list[Element] = Field(default_factory=list)
+    controls: list[Control] = Field(default_factory=list)
+    variables: list[Variable] = Field(default_factory=list)
+
+
+class BoardProfile(_M):
+    """User-defined target for an existing controller generator runtime."""
+    id: str = Field(..., pattern=r"^custom_[a-z0-9_]+$")
+    title: str = Field(..., min_length=1)
+    lang: Literal["arduino", "micropython", "python"]
+    wiring: list[tuple[str, str]]
+    serial_setup: str
+    serial_decl: str = ""
+    port_expr: str = "Serial1"
+    fqbn: str = ""
+    core: str = ""
+    core_url: str = ""
+    wifi: bool = False
+    led: str = "LED_BUILTIN"
+    pwm: str = ""
+    adc: str = ""
+    max_baud: int = Field(921600, ge=9600, le=921600)
+    notes: list[str] = Field(default_factory=list)
+
+
 # ------------------------------------------------------------------ project
 
 class Project(_M):
@@ -245,6 +275,15 @@ class Project(_M):
     pages: list[Page] = Field(default_factory=lambda: [Page(id=0, name="Home")])
     screensaver: Screensaver = Field(default_factory=Screensaver)
     controller: Controller = Field(default_factory=Controller)
+    presets: list[Preset] = Field(default_factory=list)
+    board_profiles: list[BoardProfile] = Field(default_factory=list)
+
+    @model_validator(mode="before")
+    @classmethod
+    def migrate_v1(cls, data):
+        if isinstance(data, dict) and data.get("schema_version", 1) == 1:
+            return {**data, "schema_version": SCHEMA_VERSION, "presets": data.get("presets", [])}
+        return data
 
     # -------- lookup helpers
     def page(self, page_id: int) -> Page:

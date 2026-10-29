@@ -1,7 +1,7 @@
 import { useMemo, useState } from "react";
 import { useTranslation } from "react-i18next";
 import { bridge } from "../lib/api";
-import { nextId, uniqueVarName, updatePage } from "../lib/project";
+import { insertPreset, nextId, uniqueVarName, updatePage } from "../lib/project";
 import type { Control, Element, Project } from "../lib/types";
 import { useStore } from "../store";
 import { Icon, WIDGET_ICON } from "./Icons";
@@ -17,6 +17,7 @@ const ELEMENTS: { type: string; w: number; h: number; extra: Record<string, unkn
 
 const WIDGET_SIZE: Record<string, [number, number]> = {
   button: [200, 64], toggle: [240, 160], number: [180, 64], progress: [320, 28], indicator: [140, 44], slider: [320, 48],
+  live_text: [280, 48], clock: [180, 48], qr: [180, 180], choice: [300, 56], curve: [320, 160],
 };
 
 const WIDGET_PROPS: Record<string, Record<string, unknown>> = {
@@ -32,6 +33,7 @@ const clampPos = (p: Project, x: number, y: number, w: number, h: number) => ({
 export function InsertPanel() {
   const { t } = useTranslation();
   const catalog = useStore((s) => s.catalog)!;
+  const presets = useStore((s) => s.project?.presets ?? []);
   const [q, setQ] = useState("");
   const [expert, setExpert] = useState(false);
   const st = useStore.getState;
@@ -72,7 +74,9 @@ export function InsertPanel() {
       let v: string | null = null;
       if (needsVar) {
         v = uniqueVarName(p, type.replace(/^raw:/, ""));
-        project = { ...p, variables: [...p.variables, { name: v, type: "int16", vp: null, init: 0, length: 16, decimals: 0, doc: "" }] };
+        const text = type === "live_text" || type === "qr";
+        project = { ...p, variables: [...p.variables, { name: v, type: text ? "text" : "int16", vp: null,
+          init: text ? "" : 0, length: text ? 64 : 16, decimals: 0, doc: "" }] };
       }
       const ctl: Control = { id, type, x, y, w, h, var: v, props: { ...(WIDGET_PROPS[type] ?? {}) }, visible: true };
       return [updatePage(project, st().pageId, (pg) => ({ ...pg, controls: [...pg.controls, ctl] })), id];
@@ -109,6 +113,25 @@ export function InsertPanel() {
           </button>
         ))}
       </div>
+      {presets.length > 0 && <>
+        <h4 className="group-title">{t("insert.presets")}</h4>
+        <div className="widget-list">
+          {presets.filter((p) => match(p.name)).map((preset, index) => (
+            <div key={`${preset.name}-${index}`} className="row gap">
+              <button className="widget-card grow" onClick={() => {
+                const s = st();
+                if (!s.project) return;
+                const [next, ids] = insertPreset(s.project, s.pageId, preset, s.viewCenter);
+                s.commit(next); s.select(ids); s.setRightTab("props");
+              }}><Icon name="star" size={18} /> {preset.name}</button>
+              <button className="icon-btn xs" title={t("common.delete")} onClick={() => {
+                const s = st();
+                if (s.project) s.commit({ ...s.project, presets: (s.project.presets ?? []).filter((p) => p !== preset) });
+              }}><Icon name="trash" size={14} /></button>
+            </div>
+          ))}
+        </div>
+      </>}
       {Object.entries(widgetGroups).map(([cat, ws]) => (
         <div key={cat}>
           <h4 className="group-title">{t(`insert.cat.${cat}`, { defaultValue: cat })}</h4>
@@ -119,6 +142,7 @@ export function InsertPanel() {
                 <div className="widget-text">
                   <div className="widget-title">{t(`widgets.${w.type}.title`, { defaultValue: w.title })}</div>
                   <div className="widget-desc">{t(`widgets.${w.type}.desc`, { defaultValue: w.description })}</div>
+                  {w.verified !== "hardware" && <div className="muted small">{t(`insert.verified.${w.verified}`, { defaultValue: w.verified })}</div>}
                 </div>
               </button>
             ))}

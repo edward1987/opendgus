@@ -94,7 +94,8 @@ def decode_display_part_number(part_number: str) -> dict:
 def list_widgets() -> list[dict]:
     """List the smart widgets (button, toggle, number, slider, progress, indicator...) with a one-line description.
     Use get_widget_schema(type) for the full property list before adding one."""
-    return [{"type": k, "title": w.title, "category": w.category, "needs_var": w.needs_var, "description": w.doc}
+    return [{"type": k, "title": w.title, "category": w.category, "needs_var": w.needs_var, "description": w.doc,
+             "verified": w.verified, "var_types": list(w.var_types), "runtime_input": w.runtime_input}
             for k, w in sorted(W.WIDGETS.items())]
 
 
@@ -153,6 +154,18 @@ def open_project(folder: str) -> dict:
         raise ToolError(f"no project.json in {f}")
     SESSION.folder = f
     return {"folder": str(f), **_summary(SESSION.load())}
+
+
+def import_legacy_project(source: str, destination: str) -> dict:
+    """Import a vendor DWprj.hmi/.tft project into a new OpenDGUS folder. Returns every skipped item as issues."""
+    from ..legacy_import import import_project
+    with SESSION.lock:
+        try:
+            result = import_project(Path(source), Path(destination))
+        except (ValueError, OSError, KeyError) as exc:
+            raise ToolError(str(exc)) from exc
+        SESSION.folder = Path(result["folder"])
+        return result
 
 
 def get_project(page: Optional[int] = None) -> dict:
@@ -391,6 +404,51 @@ def add_control(page: int, type: str, x: int, y: int, w: int, h: int, var: Optio
         return {"id": c.id, "page": page}
 
 
+def list_presets() -> list[dict]:
+    """Reusable groups saved in this project; use apply_preset to place one on a page."""
+    return [{"name": preset.name, "width": preset.width, "height": preset.height,
+             "elements": len(preset.elements), "controls": len(preset.controls)}
+            for preset in SESSION.load().presets]
+
+
+def apply_preset(name: str, page: int, x: int, y: int) -> dict:
+    """Place a saved visual preset at x,y with fresh item IDs and independent variable names."""
+    with SESSION.lock:
+        p = SESSION.load()
+        try:
+            preset = next(item for item in p.presets if item.name == name)
+        except StopIteration:
+            raise ToolError(f"no preset {name!r}; see list_presets") from None
+        target = p.page(page)
+        names = {v.name for v in p.variables}
+        renamed = {}
+        for var in preset.variables:
+            stem, n = var.name, 1
+            while f"{stem}{n}" in names:
+                n += 1
+            new_name = f"{stem}{n}"
+            names.add(new_name)
+            renamed[var.name] = new_name
+            p.variables.append(var.model_copy(update={"name": new_name, "vp": None}, deep=True))
+        placed = []
+        for item in [*preset.elements, *preset.controls]:
+            copy = item.model_copy(deep=True)
+            copy.id = ""
+            if copy.type == "line":
+                copy.points = [value + (x if i % 2 == 0 else y) for i, value in enumerate(copy.points)]
+            else:
+                copy.x += x
+                copy.y += y
+            if isinstance(copy, Control):
+                copy.var = renamed.get(copy.var, copy.var)
+                target.controls.append(copy)
+            else:
+                target.elements.append(copy)
+            placed.append(copy)
+        SESSION.save(p)
+        return {"ids": [item.id for item in placed], "variables": renamed, "page": page}
+
+
 def update_item(id: str, changes: dict) -> dict:
     """Change fields of an element or control by id, e.g. update_item('c3', {'x': 50, 'props': {'label': 'Hi'}}).
     For controls, 'props' is merged into the existing props."""
@@ -481,7 +539,9 @@ def validate() -> dict:
     """Compile in memory and report errors/warnings (off-screen controls, missing variables, overlaps, flash)."""
     p = SESSION.load()
     r = compile_project(p, SESSION.require(), write=False)
-    return {"ok": r.ok, "issues": [str(i) for i in r.issues], "pages": sorted(r.pages), "icons": r.icon_count}
+    return {"ok": r.ok, "issues": [str(i) for i in r.issues], "pages": sorted(r.pages), "icons": r.icon_count,
+            "flash_used_bytes": sum(f["size"] for f in r.files.values()),
+            "flash_capacity_bytes": p.display.flash_mb * 1024 * 1024}
 
 
 def build() -> dict:
@@ -582,9 +642,12 @@ def emulator_state() -> dict:
 def list_controller_boards() -> list[dict]:
     """Boards the controller code can be generated for (Arduino Nano/Uno/Mega, Pico/Pico 2/Pico 2 W, ESP32 in
     Arduino C++; Pico/Pico 2 W/ESP32 in MicroPython; Raspberry Pi / PC in Python), with wiring."""
-    from ..codegen.boards import BOARDS
+    from dataclasses import asdict
+    from ..codegen.boards import BOARDS, configure_custom_boards
+    configure_custom_boards(SESSION.load())
     return [{"id": b.id, "title": b.title, "language": b.lang, "network": b.wifi, "max_baud": b.max_baud,
-             "wiring": [f"display {d} -> {p}" for d, p in b.wiring]} for b in BOARDS.values()]
+             "wiring": [f"display {d} -> {p}" for d, p in b.wiring], "profile": asdict(b),
+             "custom": b.id.startswith("custom_")} for b in BOARDS.values()]
 
 
 def list_controller_samples() -> list[dict]:
@@ -594,7 +657,8 @@ def list_controller_samples() -> list[dict]:
 
 
 def _controller(p: Project, board: str) -> str:
-    from ..codegen.boards import find, get
+    from ..codegen.boards import configure_custom_boards, find, get
+    configure_custom_boards(p)
     bid = board or p.controller.board
     if not bid:
         raise ToolError("which board? pass board= (see list_controller_boards)")
@@ -863,10 +927,11 @@ def device_write_variable(port: str, name: str, value: int, baud: int = 115200) 
 
 
 TOOLS = [list_display_profiles, decode_display_part_number, list_widgets, get_widget_schema, list_dgus_controls,
-         search_icons, list_templates, create_project, open_project, get_project, set_display, set_theme,
+         search_icons, list_templates, create_project, open_project, import_legacy_project, get_project, set_display, set_theme,
          set_screensaver,
          add_variable, update_variable, delete_variable, add_page, update_page, delete_page, duplicate_page,
-         add_element, add_control, update_item, delete_item, arrange, apply_template, render_page, validate, build,
+         add_element, add_control, list_presets, apply_preset, update_item, delete_item, arrange, apply_template,
+         render_page, validate, build,
          emulator_start, emulator_tap, emulator_set_variable, emulator_wait, emulator_set_page, emulator_state,
          list_serial_ports, device_info, device_upload, device_read_variable, device_write_variable,
          device_set_standby, list_controller_boards, list_controller_samples, generate_controller_project,
@@ -874,7 +939,7 @@ TOOLS = [list_display_profiles, decode_display_part_number, list_widgets, get_wi
          create_controller_sample]
 
 READ_ONLY = {"list_display_profiles", "decode_display_part_number", "list_widgets", "get_widget_schema",
-             "list_dgus_controls", "search_icons", "list_templates", "get_project", "render_page", "validate",
+             "list_dgus_controls", "search_icons", "list_templates", "list_presets", "get_project", "render_page", "validate",
              "list_serial_ports", "device_info", "device_read_variable", "emulator_state",
              "list_controller_boards", "list_controller_samples", "read_controller_file", "controller_toolchain"}
 DESTRUCTIVE = {"delete_page", "delete_item", "delete_variable", "apply_template", "device_upload",

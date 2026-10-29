@@ -90,7 +90,7 @@ APPROX = {
     "var_input": "var_input/text_input: keyboards are not simulated; complete the input with enter_value()",
 }
 
-PLACEHOLDER = {"curve", "basic_graphics", "table", "zone_scroll", "qr_code", "video", "camera", "batch_icon",
+PLACEHOLDER = {"curve", "basic_graphics", "table", "zone_scroll", "video", "camera", "batch_icon",
                "roll_character", "gtf_text"}
 INVISIBLE = {"data_transmit"}
 
@@ -1257,6 +1257,30 @@ class Device:
             y += ch + v["ver_dis"]
         mask = layer.convert("L").crop((x1, y1, x2 + 1, y2 + 1))
         img.paste(Image.new("RGB", mask.size, col), (x1, y1), mask)
+
+    def _draw_qr_code(self, img, v, c) -> None:
+        """Approximate the firmware's QR encoder from the current text VP."""
+        import qrcode
+
+        raw = self._text_bytes(v["vp"], 255).split(b"\0")[0].rstrip(b"\xff")
+        if not raw:
+            return
+        qr = qrcode.QRCode(error_correction=qrcode.constants.ERROR_CORRECT_M, border=0)
+        qr.add_data(raw)
+        qr.make(fit=True)
+        matrix = qr.get_matrix()
+        n = len(matrix)
+        unit = max(1, v["unit_pixels"])
+        bg = rgb565(v["color0"]) if v["use_colors"] else (255, 255, 255)
+        fg = rgb565(v["color1"]) if v["use_colors"] else (0, 0, 0)
+        tile = Image.new("RGB", (n, n), bg)
+        pixels = tile.load()
+        for y, row in enumerate(matrix):
+            for x, bit in enumerate(row):
+                if bit:
+                    pixels[x, y] = fg
+        img.paste(tile.resize((n * unit, n * unit), Image.Resampling.NEAREST), (v["x"], v["y"]))
+        self.note("qr_code: host QR encoding approximates DGUS output; verify size on hardware")
 
     def _draw_dgus2_text(self, img, v, c) -> None:
         self._approx("dgus2_text")

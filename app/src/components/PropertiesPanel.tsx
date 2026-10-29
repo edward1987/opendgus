@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { useShallow } from "zustand/react/shallow";
 import { useTranslation } from "react-i18next";
-import { arrangeItems, AlignMode, duplicateItems, isControl, isLine, Item, removeItems, updateItems, updatePage } from "../lib/project";
+import { arrangeItems, AlignMode, duplicateItems, isControl, isLine, Item, makePreset, removeItems, updateItems, updatePage } from "../lib/project";
 import { JsonSchema } from "../lib/types";
 import { FieldDesc, rawSpecToSchema, schemaToFields, splitAdvanced } from "../lib/schemaForm";
 import type { Control, Page } from "../lib/types";
@@ -54,6 +54,25 @@ export function PropertiesPanel() {
   return <ItemProperties key={items[0].id} it={items[0]} />;
 }
 
+function SavePreset({ ids }: { ids: string[] }) {
+  const { t } = useTranslation();
+  const [open, setOpen] = useState(false);
+  const [name, setName] = useState("");
+  const save = () => {
+    const s = useStore.getState();
+    if (!s.project || !name.trim()) return;
+    const preset = makePreset(s.project, ids, name);
+    s.commit({ ...s.project, presets: [...(s.project.presets ?? []), preset] });
+    setName("");
+    setOpen(false);
+  };
+  return open ? <div className="row gap">
+    <input autoFocus value={name} placeholder={t("insert.presetName")} onChange={(e) => setName(e.target.value)}
+      onKeyDown={(e) => { if (e.key === "Enter") save(); if (e.key === "Escape") setOpen(false); }} />
+    <button className="btn sm primary" disabled={!name.trim()} onClick={save}>{t("common.save")}</button>
+  </div> : <button className="btn sm" onClick={() => setOpen(true)}><Icon name="star" size={14} /> {t("insert.savePreset")}</button>;
+}
+
 function ItemProperties({ it }: { it: Item }) {
   const { t } = useTranslation();
   const catalog = useStore((s) => s.catalog)!;
@@ -93,6 +112,8 @@ function ItemProperties({ it }: { it: Item }) {
         <button className="icon-btn sm danger" title={`${t("common.delete")} (Del)`} onClick={() => st().commit(removeItems(st().project!, [it.id]))}><Icon name="trash" /></button>
       </div>
       {description && <p className="props-desc">{description}</p>}
+      {widget?.runtime_input && <p className="muted small">{widget.runtime_input}</p>}
+      <SavePreset ids={[it.id]} />
 
       <h4 className="group-title">{t("props.layout")}</h4>
       {isLine(it) ? (
@@ -158,6 +179,7 @@ function MultiProperties({ items }: { items: Item[] }) {
         </div>
         <button className="icon-btn sm danger" title={t("common.delete")} onClick={() => st().commit(removeItems(st().project!, items.map((i) => i.id)))}><Icon name="trash" /></button>
       </div>
+      <SavePreset ids={items.map((i) => i.id)} />
       <h4 className="group-title">{t("props.align")}</h4>
       <div className="align-grid">
         {ALIGN.map((a) => (

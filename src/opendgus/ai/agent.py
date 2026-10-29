@@ -94,9 +94,13 @@ def system_prompt() -> str:
     guide = (DATA / "design_guide.md").read_text(encoding="utf-8")
     return ("You are the OpenDGUS design assistant inside a desktop editor for DWIN T5L touch displays. You edit the "
             "project that is open in the editor using the tools; the user sees every change live on the canvas.\n"
-            "Work step by step: read the project, make focused changes, render the page to check the result, and "
-            "fix problems before you answer. Keep replies short: say what you changed and anything the user should "
-            "decide. Do not invent hardware facts; ask when a requirement is unclear.\n\n" + guide)
+            "For a new design, first identify the display size, data the controller supplies, touch actions, and "
+            "whether a controller board is needed. Ask only for information that prevents a working design; support "
+            "any device or industry. Discover widgets with list_widgets/get_widget_schema, including their verification "
+            "status and runtime input. Work step by step: read the project, make focused changes, render each page, "
+            "validate, then exercise important controls in the emulator and correct problems. Distinguish emulator "
+            "approximation from hardware verification. Keep replies short: say what changed and which controller "
+            "data or hardware test is still needed. Do not invent hardware facts.\n\n" + guide)
 
 
 def project_context() -> str:

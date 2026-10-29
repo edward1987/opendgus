@@ -261,6 +261,23 @@ export function FieldEditor({ field: f, value, onChange }: { field: FieldDesc; v
         </div>
       );
     }
+    case "stringList": {
+      const list: string[] = Array.isArray(v) ? v : [];
+      return (
+        <div className="prop-block">
+          <div className="prop-block-head">
+            <span>{label}</span>
+            <button type="button" className="icon-btn xs" title={t("common.add")} onClick={() => onChange([...list, "Option"])}><Icon name="plus" size={14} /></button>
+          </div>
+          {list.map((item, i) => (
+            <div key={i} className="row gap">
+              <input value={item} onChange={(e) => onChange(list.map((x, j) => j === i ? e.target.value : x))} />
+              <button type="button" className="icon-btn xs" onClick={() => onChange(list.filter((_, j) => j !== i))}><Icon name="trash" size={14} /></button>
+            </div>
+          ))}
+        </div>
+      );
+    }
     case "object":
       return (
         <fieldset className="prop-block">

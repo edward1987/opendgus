@@ -5,6 +5,7 @@
     "backendHint": "Verificați că mediul Python există (.venv în repo) sau setați OPENDGUS_PYTHON către un Python cu opendgus instalat."
   },
   "common": {
+    "save": "Salvează",
     "back": "Înapoi",
     "next": "Înainte",
     "browse": "Alege…",
@@ -16,6 +17,13 @@
     "loading": "Se încarcă…"
   },
   "welcome": {
+    "importLegacy": "Importă proiect DGUS",
+    "legacySource": "Alege dosarul proiectului DGUS original",
+    "legacyDestination": "Alege un dosar nou pentru proiectul OpenDGUS",
+    "importFailed": "Proiectul nu a putut fi importat: {{error}}",
+    "importReport": "Raport de import",
+    "importSummary": "Au fost importate {{pages}} pagini și {{controls}} controale. Verifică elementele de mai jos înainte de compilare.",
+    "openImported": "Deschide proiectul importat",
     "title": "Creează ecrane frumoase pentru display-urile DWIN",
     "subtitle": "Trage, plasează, compilează. OpenDGUS transformă designul în fișiere DGUS II gata de încărcat — fără unealta DWIN.",
     "new": "Proiect nou",
@@ -126,6 +134,9 @@
     "snapHint": "Aliniere la grila de 8 px și la alte elemente (țineți Alt pentru mișcare liberă)"
   },
   "insert": {
+    "presets": "Presetările tale",
+    "presetName": "Numele presetării",
+    "savePreset": "Salvează ca presetare",
     "search": "Caută forme și widget-uri…",
     "shapes": "Forme și text",
     "chooseImage": "Alege o imagine",
@@ -154,6 +165,11 @@
     }
   },
   "widgets": {
+    "live_text": { "title": "Text dinamic", "desc": "Afișează text trimis de controler." },
+    "clock": { "title": "Ceas", "desc": "Afișează ceasul în timp real al displayului." },
+    "qr": { "title": "Cod QR", "desc": "Generează un cod QR din textul trimis de controler." },
+    "choice": { "title": "Selecție", "desc": "Alege o opțiune și afișează opțiunea activă." },
+    "curve": { "title": "Grafic live", "desc": "Trasează datele trimise de controler pe un canal DGUS." },
     "button": {
       "title": "Buton",
       "desc": "Zonă de atingere cu etichetă/pictogramă și efect la apăsare. Deschide o pagină, setează sau incrementează o variabilă, ori trimite o tastă."
@@ -389,6 +405,7 @@
     "openController": "Deschide codul pentru controler"
   },
   "validate": {
+    "flash": "{{used}} / {{total}} MB în flash",
     "title": "Verificare",
     "noIssues": "Nicio problemă — gata de compilare.",
     "ok": "Valid",
@@ -537,6 +554,13 @@
     "openController": "Cod pentru controler…"
   },
   "controller": {
+    "cloneProfile": "Personalizează placa",
+    "profileName": "Numele profilului",
+    "serialPort": "Expresia portului serial",
+    "maxBaud": "Viteza maximă",
+    "serialDecl": "Declarații seriale",
+    "serialSetup": "Cod de inițializare serială",
+    "saveProfile": "Salvează profilul plăcii",
     "title": "Cod pentru controler",
     "tabCode": "Acest proiect",
     "tabSamples": "Exemple",

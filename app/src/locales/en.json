@@ -11,11 +11,19 @@
     "delete": "Delete",
     "duplicate": "Duplicate",
     "add": "Add",
+    "save": "Save",
     "close": "Close",
     "done": "Done",
     "loading": "Loading…"
   },
   "welcome": {
+    "importLegacy": "Import DGUS project",
+    "legacySource": "Choose the original DGUS project folder",
+    "legacyDestination": "Choose a new OpenDGUS project folder",
+    "importFailed": "Could not import the project: {{error}}",
+    "importReport": "Import report",
+    "importSummary": "Imported {{pages}} pages and {{controls}} controls. Review any items below before building.",
+    "openImported": "Open imported project",
     "title": "Design beautiful screens for DWIN displays",
     "subtitle": "Drag, drop, build. OpenDGUS turns your design into ready-to-flash DGUS II files — no DWIN tool needed.",
     "new": "New project",
@@ -125,11 +133,15 @@
     "snapHint": "Snap to an 8 px grid and to other items (hold Alt to move freely)"
   },
   "insert": {
+    "presets": "Your presets",
+    "presetName": "Preset name",
+    "savePreset": "Save as preset",
     "search": "Search shapes and widgets…",
     "shapes": "Shapes & text",
     "chooseImage": "Choose an image",
     "expert": "Expert: DGUS controls",
     "expertHint": "Low-level DGUS II controls, configured field by field. Prefer smart widgets when possible.",
+    "verified": { "csharp": "Matches the vendor encoder; hardware behavior needs testing" },
     "el": {
       "rect": "Rectangle",
       "ellipse": "Ellipse",
@@ -176,6 +188,26 @@
     "slider": {
       "title": "Slider",
       "desc": "Drag to set a variable between min and max."
+    },
+    "live_text": {
+      "title": "Live text",
+      "desc": "Show text supplied by the controller."
+    },
+    "clock": {
+      "title": "Clock",
+      "desc": "Show the display's real-time clock."
+    },
+    "qr": {
+      "title": "QR code",
+      "desc": "Generate a QR code from controller-supplied text."
+    },
+    "choice": {
+      "title": "Choice",
+      "desc": "Select one option and show the active choice."
+    },
+    "curve": {
+      "title": "Live curve",
+      "desc": "Plot samples sent by the controller to a DGUS curve channel."
     }
   },
   "props": {
@@ -395,7 +427,8 @@
     "pages_one": "{{count}} page",
     "pages_other": "{{count}} pages",
     "icons_one": "{{count}} icon",
-    "icons_other": "{{count}} icons"
+    "icons_other": "{{count}} icons",
+    "flash": "{{used}} / {{total}} MB flash output"
   },
   "build": {
     "title": "Build",
@@ -548,6 +581,13 @@
     "openFolder": "Open folder",
     "intro": "OpenDGUS writes the program for the board that drives this display: it receives every touch, writes values to the screen, switches auto-dim on at start-up and runs the screensaver. Choose your board.",
     "wiring": "Wiring",
+    "cloneProfile": "Customize board",
+    "profileName": "Profile name",
+    "serialPort": "Serial port expression",
+    "maxBaud": "Maximum baud",
+    "serialDecl": "Serial declarations",
+    "serialSetup": "Serial setup code",
+    "saveProfile": "Save board profile",
     "baudWarn": "The display runs at {{baud}} baud, too fast for this board's display port (max {{max}}).",
     "setBaud": "Use {{max}} baud",
     "generated": "{{count}} files written.",

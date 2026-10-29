@@ -384,8 +384,13 @@ def compile_project(project: Project, folder: Optional[Path] = None, out_dir: Op
         if page.id in res.press_pages:
             press = ctx.drawn.copy()
             for c in page_controls:
-                if not c.type.startswith("raw:") and get_widget(c.type).has_press_effect:
-                    get_widget(c.type).draw(ctx, c, press, pressed=True)
+                if not c.type.startswith("raw:"):
+                    try:
+                        w = get_widget(c.type)
+                        if w.has_press_effect:
+                            w.draw(ctx, c, press, pressed=True)
+                    except Exception as e:
+                        res.issues.append(Issue("error", c.id, f"{c.type}: {e}"))
             res.pages[res.press_pages[page.id]] = press.convert("RGB")
         for r in recs:
             r.kind = S.REGISTRY[r.spec].kind
